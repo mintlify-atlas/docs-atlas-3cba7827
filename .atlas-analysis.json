@@ -1,0 +1,171 @@
+{
+  "projectType": "general",
+  "projectName": "MCP for Beginners",
+  "projectDescription": "An open-source curriculum that teaches the fundamentals of Model Context Protocol (MCP) through hands-on code examples in C#, Java, TypeScript, JavaScript, Rust, and Python.",
+  "theme": "palm",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Curriculum",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "study-guide"
+            ]
+          },
+          {
+            "group": "Foundation",
+            "pages": [
+              "modules/00-introduction",
+              "modules/01-core-concepts",
+              "modules/02-security"
+            ]
+          },
+          {
+            "group": "Building Your First Server",
+            "pages": [
+              "modules/03-getting-started",
+              "modules/03-first-server",
+              "modules/03-client",
+              "modules/03-llm-client",
+              "modules/03-vscode",
+              "modules/03-stdio-server",
+              "modules/03-http-streaming",
+              "modules/03-ai-toolkit",
+              "modules/03-testing",
+              "modules/03-deployment"
+            ]
+          },
+          {
+            "group": "Practical & Advanced",
+            "pages": [
+              "modules/04-practical-implementation",
+              "modules/05-advanced-topics"
+            ]
+          },
+          {
+            "group": "Community & Best Practices",
+            "pages": [
+              "modules/06-community-contributions",
+              "modules/07-lessons-early-adoption",
+              "modules/08-best-practices",
+              "modules/09-case-study",
+              "modules/10-ai-toolkit-workshop"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Hands-On Labs",
+        "groups": [
+          {
+            "group": "MCP Server with Database",
+            "pages": [
+              "labs/overview",
+              "labs/00-introduction",
+              "labs/01-architecture",
+              "labs/02-security",
+              "labs/03-setup",
+              "labs/04-database",
+              "labs/05-mcp-server",
+              "labs/06-tools",
+              "labs/07-semantic-search",
+              "labs/08-testing",
+              "labs/09-vscode",
+              "labs/10-deployment",
+              "labs/11-monitoring",
+              "labs/12-best-practices"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced Topics",
+        "groups": [
+          {
+            "group": "Integrations",
+            "pages": [
+              "advanced/azure-integration",
+              "advanced/foundry-integration",
+              "advanced/multi-modality"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "advanced/oauth2",
+              "advanced/entra-id-auth",
+              "advanced/security"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "advanced/root-contexts",
+              "advanced/routing",
+              "advanced/scaling",
+              "advanced/custom-transport",
+              "advanced/protocol-features"
+            ]
+          },
+          {
+            "group": "Capabilities",
+            "pages": [
+              "advanced/sampling",
+              "advanced/realtime-streaming",
+              "advanced/realtime-search",
+              "advanced/web-search",
+              "advanced/context-engineering"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Code Samples",
+        "groups": [
+          {
+            "group": "Basic Examples",
+            "pages": [
+              "samples/overview",
+              "samples/csharp",
+              "samples/java",
+              "samples/javascript",
+              "samples/python",
+              "samples/typescript",
+              "samples/rust"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "12-module structured learning path from fundamentals to production-ready MCP implementations",
+    "Cross-language code examples in C#, Java, TypeScript, JavaScript, Rust, and Python",
+    "Hands-on labs covering MCP server architecture, security, PostgreSQL integration, and Azure deployment",
+    "Security-first curriculum covering OAuth2, Entra ID authentication, and MCP-specific security best practices",
+    "Real-world integrations with VS Code, Claude Desktop, Azure AI Foundry, and other MCP hosts",
+    "13-lab capstone module for building production MCP servers with database integration",
+    "Multi-language support with automated translations in 48+ languages",
+    "Coverage of advanced topics: real-time streaming, semantic search, multi-modality, and context engineering"
+  ],
+  "publicApiSurface": [
+    "MCP Server (tools, resources, prompts exposure)",
+    "MCP Client (server connection and protocol handling)",
+    "stdio transport protocol",
+    "HTTP streaming transport",
+    "Tool invocation API",
+    "Resource management API",
+    "Sampling API",
+    "Root contexts API",
+    "FastMCP Python framework",
+    "@modelcontextprotocol/sdk TypeScript SDK",
+    "Spring Boot MCP integration (Java)",
+    "MCP Inspector debugging tool"
+  ]
+}
