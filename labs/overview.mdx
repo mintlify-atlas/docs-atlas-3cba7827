@@ -1,0 +1,136 @@
+---
+title: "MCP Server with Database — Labs Overview"
+description: "Hands-on labs for building a production-ready MCP server with PostgreSQL, Row Level Security, semantic search, and Azure deployment."
+---
+
+## What you will build
+
+These labs walk you through building the **Zava Retail Analytics MCP Server** — a production-grade implementation that connects AI assistants to a PostgreSQL retail database. The sample repository is at [github.com/microsoft/MCP-Server-and-PostgreSQL-Sample-Retail](https://github.com/microsoft/MCP-Server-and-PostgreSQL-Sample-Retail).
+
+By the end of the path you will have built:
+
+- A multi-table retail database with customer orders, products, and inventory
+- Row Level Security for store-based data isolation
+- Semantic product search using Azure OpenAI embeddings and pgvector
+- VS Code AI Chat integration for natural language queries
+- Production-ready deployment with Docker and Azure Container Apps
+- Comprehensive monitoring with Application Insights
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Programming" icon="code">
+    Familiarity with Python (preferred) or a similar language. Basic understanding of async programming.
+  </Card>
+  <Card title="Databases" icon="database">
+    Basic SQL and relational database concepts. No PostgreSQL expertise required.
+  </Card>
+  <Card title="APIs" icon="plug">
+    Understanding of REST APIs and HTTP concepts. Familiarity with JSON.
+  </Card>
+  <Card title="Tools" icon="terminal">
+    Command line, Git, and a code editor. Docker familiarity recommended but not required.
+  </Card>
+</CardGroup>
+
+### Required tools
+
+| Tool | Purpose |
+|------|---------|
+| Docker Desktop | Run PostgreSQL and the MCP server locally |
+| Azure CLI | Deploy cloud resources |
+| VS Code | Development environment and MCP Chat integration |
+| Git | Clone the sample repository |
+| Python 3.8+ | MCP server development |
+
+## Lab structure
+
+The labs are organized into three phases.
+
+### Phase 1 — Foundations (Labs 00–03)
+
+Understand the architecture, security model, and get your environment ready before writing any server code.
+
+### Phase 2 — Building the MCP Server (Labs 04–06)
+
+Design the database schema, implement the FastMCP server, and create database query tools.
+
+### Phase 3 — Advanced Features and Production (Labs 07–12)
+
+Add semantic search, testing, VS Code integration, deployment, monitoring, and best practices.
+
+## All labs
+
+<CardGroup cols={2}>
+  <Card title="Lab 0: Introduction" icon="book-open" href="/labs/00-introduction">
+    Overview of MCP database integration and the Zava Retail use case.
+  </Card>
+  <Card title="Lab 1: Core Architecture" icon="sitemap" href="/labs/01-architecture">
+    Layered architecture patterns, database design, and connection management.
+  </Card>
+  <Card title="Lab 2: Security & Multi-Tenancy" icon="shield" href="/labs/02-security">
+    Row Level Security, Azure Entra ID authentication, and audit logging.
+  </Card>
+  <Card title="Lab 3: Environment Setup" icon="wrench" href="/labs/03-setup">
+    Install tools, deploy Azure resources, and start Docker containers.
+  </Card>
+  <Card title="Lab 4: Database Design" icon="table" href="/labs/04-database">
+    PostgreSQL schema, pgvector setup, RLS policies, and sample data.
+  </Card>
+  <Card title="Lab 5: MCP Server" icon="server" href="/labs/05-mcp-server">
+    Build the FastMCP server with database integration and health endpoints.
+  </Card>
+  <Card title="Lab 6: Tool Development" icon="hammer" href="/labs/06-tools">
+    Create advanced query tools, schema introspection, and analytics tools.
+  </Card>
+  <Card title="Lab 7: Semantic Search" icon="magnifying-glass" href="/labs/07-semantic-search">
+    Vector embeddings with Azure OpenAI and pgvector similarity search.
+  </Card>
+  <Card title="Lab 8: Testing & Debugging" icon="flask" href="/labs/08-testing">
+    Unit tests, integration tests, performance testing, and debugging tools.
+  </Card>
+  <Card title="Lab 9: VS Code Integration" icon="window" href="/labs/09-vscode">
+    Configure VS Code MCP settings and use AI Chat for natural language queries.
+  </Card>
+  <Card title="Lab 10: Deployment" icon="cloud" href="/labs/10-deployment">
+    Docker, Azure Container Apps, CI/CD pipelines, and auto-scaling.
+  </Card>
+  <Card title="Lab 11: Monitoring" icon="chart-line" href="/labs/11-monitoring">
+    Application Insights, structured logging, alerting, and dashboards.
+  </Card>
+  <Card title="Lab 12: Best Practices" icon="star" href="/labs/12-best-practices">
+    Performance optimization, security hardening, and production guidelines.
+  </Card>
+</CardGroup>
+
+## Recommended learning paths
+
+<AccordionGroup>
+  <Accordion title="Beginner path — new to MCP">
+    1. Complete [MCP for Beginners modules 0–10](https://aka.ms/mcp-for-beginners) first.
+    2. Work through Labs 00–03 to reinforce foundations.
+    3. Follow Labs 04–06 for hands-on building.
+    4. Try Labs 07–09 for practical usage.
+  </Accordion>
+  <Accordion title="Intermediate path — some MCP experience">
+    1. Review Labs 00–01 for database-specific concepts.
+    2. Focus on Labs 02–06 for implementation.
+    3. Dive into Labs 07–12 for advanced features.
+  </Accordion>
+  <Accordion title="Advanced path — experienced with MCP">
+    1. Skim Labs 00–03 for context.
+    2. Focus on Labs 04–09 for database integration patterns.
+    3. Concentrate on Labs 10–12 for production deployment.
+  </Accordion>
+</AccordionGroup>
+
+## Official MCP resources
+
+- [MCP Documentation](https://modelcontextprotocol.io/) — Detailed tutorials and user guides
+- [MCP Specification](https://spec.modelcontextprotocol.io/specification/2025-11-25/) — Protocol architecture and technical reference
+- [MCP GitHub Repository](https://github.com/modelcontextprotocol) — Open-source SDKs and code samples
+- [OWASP MCP Top 10](https://microsoft.github.io/mcp-azure-security-guide/mcp/) — Security best practices
+
+<Card title="Start with Lab 0: Introduction" icon="arrow-right" href="/labs/00-introduction">
+  Begin the learning path here.
+</Card>

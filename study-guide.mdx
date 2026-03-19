@@ -1,0 +1,212 @@
+---
+title: "Study Guide"
+description: "A visual curriculum map and recommended learning paths for the MCP for Beginners curriculum."
+---
+
+This study guide helps you navigate the MCP for Beginners curriculum efficiently. Use it to understand how all topics connect, choose a learning path that matches your experience level, and make the most of the sample projects.
+
+<Info>
+  The curriculum follows **MCP Specification 2025-11-25**. This study guide was last updated February 5, 2026.
+</Info>
+
+## Repository Overview
+
+The Model Context Protocol (MCP) is a standardized framework for interactions between AI models and client applications. Initially created by Anthropic, MCP is now maintained by the broader MCP community through the official GitHub organization.
+
+This curriculum covers:
+- **11 core modules** (00–11) in a sequential learning path from fundamentals to advanced topics
+- **Hands-on labs** with complete solution code in multiple languages
+- **Sample projects** — working MCP server and client implementations
+- **Multi-language support** — documentation translated into 48+ languages
+
+## Repository Structure
+
+<AccordionGroup>
+  <Accordion title="Module 00 — Introduction">
+    - Overview of the Model Context Protocol
+    - Why standardization matters in AI pipelines
+    - Practical use cases and benefits
+    - High-level architecture: Hosts, Clients, and Servers
+  </Accordion>
+  <Accordion title="Module 01 — Core Concepts">
+    - Client-server architecture deep dive
+    - Key protocol components: Resources, Prompts, Tools, Sampling, Roots, Elicitation
+    - Messaging patterns in MCP (JSON-RPC 2.0)
+    - Transport mechanisms: STDIO and Streamable HTTP
+    - Tasks (experimental) and Tool Annotations
+  </Accordion>
+  <Accordion title="Module 02 — Security">
+    - Security threats in MCP-based systems
+    - Best practices for securing implementations (aligned with OWASP MCP Top 10)
+    - Authentication and authorization strategies
+    - Microsoft Prompt Shields and Azure Content Safety
+    - Prompt injection, tool poisoning, session hijacking defenses
+  </Accordion>
+  <Accordion title="Module 03 — Getting Started">
+    - Environment setup and configuration
+    - Creating your first MCP server and client
+    - 15 hands-on sub-guides covering: stdio, HTTP streaming, VS Code integration, AI Toolkit, testing, deployment, MCP Inspector, sampling, simple auth, MCP hosts, and more
+  </Accordion>
+  <Accordion title="Module 04 — Practical Implementation">
+    - Using SDKs across different programming languages
+    - Debugging, testing, and validation techniques
+    - Crafting reusable prompt templates and workflows
+    - Pagination with cursor-based strategies
+    - Sample projects with production patterns
+  </Accordion>
+  <Accordion title="Module 05 — Advanced Topics">
+    - Context engineering techniques
+    - Azure AI Foundry agent integration
+    - Multi-modal AI workflows
+    - OAuth2 authentication demos
+    - Real-time search and streaming
+    - Root contexts, routing, sampling at scale
+    - Microsoft Entra ID security integration
+    - Web search MCP implementation
+    - Protocol features: progress notifications, cancellation, resource templates
+    - Custom transport implementations
+  </Accordion>
+  <Accordion title="Modules 06–09 — Community & Best Practices">
+    - **Module 06**: Contributing to the MCP ecosystem, MCP client ecosystem, image generation tools
+    - **Module 07**: Real-world implementations, 10 production Microsoft MCP servers (Azure MCP Server, GitHub MCP, Playwright MCP, SQL Server MCP, and more)
+    - **Module 08**: Performance tuning, fault-tolerant system design, testing and resilience strategies
+    - **Module 09**: Seven comprehensive case studies (Azure AI Travel Agents, Azure DevOps Integration, documentation retrieval, API management, and more)
+  </Accordion>
+  <Accordion title="Module 10 — Hands-On Workshop">
+    A 4-lab comprehensive workshop combining MCP with AI Toolkit:
+    - Lab 1: MCP Server Fundamentals
+    - Lab 2: Advanced MCP Server Development
+    - Lab 3: AI Toolkit Integration
+    - Lab 4: Production Deployment and Scaling
+  </Accordion>
+  <Accordion title="Module 11 — Database Integration Labs">
+    A 13-lab comprehensive learning path for building production-ready MCP servers with PostgreSQL integration, using a real-world retail analytics use case (Zava Retail):
+    - Labs 00–03: Foundations — Introduction, Architecture, Security, Environment Setup
+    - Labs 04–06: Building — Database Design, MCP Server Implementation, Tool Development
+    - Labs 07–09: Advanced Features — Semantic Search, Testing & Debugging, VS Code Integration
+    - Labs 10–12: Production — Deployment, Monitoring, Optimization
+  </Accordion>
+</AccordionGroup>
+
+## Recommended Learning Paths
+
+Choose the path that fits your goals:
+
+<Tabs>
+  <Tab title="Complete Beginner">
+    Follow all modules in order from 00 to 11. Take time with Modules 00–02 to build a solid conceptual foundation before writing code.
+
+    **Estimated time**: 40–60 hours
+
+    **Suggested pace**:
+    1. Modules 00–02: Spend 2–3 hours each building concepts
+    2. Module 03: Work through sub-guides one at a time, running each example
+    3. Modules 04–05: Read and experiment with topics that interest you
+    4. Modules 06–09: Skim for community context; return when needed
+    5. Module 11: Use as a capstone to tie everything together
+  </Tab>
+  <Tab title="Experienced Developer">
+    If you already understand client-server architecture and REST APIs, you can move faster through the foundation modules.
+
+    **Suggested path**:
+    1. Skim Modules 00–01 for MCP-specific terminology
+    2. Read Module 02 fully — security is critical
+    3. Start hands-on with Module 03 sub-guides in your language of choice
+    4. Dive directly into Module 05 topics that match your use case
+    5. Use Module 11 as a production reference implementation
+  </Tab>
+  <Tab title="Language-Specific Focus">
+    Explore the `samples/` directories within each module for your preferred language:
+
+    | Language | Key Samples Location |
+    |---|---|
+    | C# | `03-GettingStarted/samples/csharp/`, `04-PracticalImplementation/samples/csharp/` |
+    | Java | `03-GettingStarted/samples/java/`, `04-PracticalImplementation/samples/java/` |
+    | JavaScript | `03-GettingStarted/samples/javascript/` |
+    | TypeScript | `03-GettingStarted/samples/typescript/` |
+    | Python | `03-GettingStarted/samples/python/`, Module 11 (FastMCP) |
+    | Rust | `03-GettingStarted/samples/rust/` |
+
+    Each sample directory contains its own README with setup instructions.
+  </Tab>
+  <Tab title="Security Focus">
+    If your primary interest is securing MCP deployments:
+
+    1. Read Module 02 in full, including the supplementary documents
+    2. Complete the [MCP Security Summit Workshop (Sherpa)](https://azure-samples.github.io/sherpa/) hands-on labs
+    3. Study the OWASP MCP Top 10 via the [OWASP MCP Azure Security Guide](https://microsoft.github.io/mcp-azure-security-guide/)
+    4. Review Module 05 sections on OAuth2, Entra ID, and advanced security
+    5. Study Module 11 labs 02 (Row Level Security) and 10 (Deployment) for production patterns
+  </Tab>
+</Tabs>
+
+## How to Use Sample Projects
+
+Sample projects are organized by module and language:
+
+<Steps>
+  <Step title="Navigate to the sample directory">
+    Each module's `samples/` folder contains language-specific subdirectories. For example, `03-GettingStarted/samples/python/` contains the Python MCP calculator server.
+  </Step>
+  <Step title="Read the local README">
+    Every sample contains its own `README.md` with specific setup instructions, dependencies, and what the sample demonstrates.
+  </Step>
+  <Step title="Install dependencies">
+    Follow the language-specific setup:
+    - **TypeScript/JavaScript**: `npm install && npm start`
+    - **Python**: `pip install -r requirements.txt`
+    - **Java**: `mvn clean install && mvn spring-boot:run`
+    - **C#**: Use the .NET CLI or Visual Studio
+  </Step>
+  <Step title="Run and explore">
+    Start the server and connect a client. Use the MCP Inspector (Module 3.13) to debug and inspect the server's exposed tools, resources, and prompts.
+  </Step>
+  <Step title="Modify and experiment">
+    Change tool definitions, add new tools, or swap transport mechanisms. The best learning happens when you break things and fix them.
+  </Step>
+</Steps>
+
+## MCP Clients and Tools
+
+The curriculum covers a wide range of MCP-compatible clients:
+
+<CardGroup cols={2}>
+  <Card title="Official Clients" icon="check-circle">
+    - Visual Studio Code (built-in MCP support)
+    - Claude Desktop
+    - Claude in VS Code
+    - Claude API
+  </Card>
+  <Card title="Community Clients" icon="users">
+    - Cline (terminal-based)
+    - Cursor (code editor)
+    - ChatMCP
+    - Windsurf
+  </Card>
+  <Card title="MCP Management Tools" icon="settings">
+    - MCP CLI
+    - MCP Manager
+    - MCP Linker
+    - MCP Router
+  </Card>
+  <Card title="Microsoft MCP Servers" icon="microsoft">
+    Azure MCP Server, GitHub MCP Server, Azure DevOps MCP Server, Playwright MCP Server, SQL Server MCP Server, and 5 more production-ready servers covered in Module 07.
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="MCP Documentation" icon="book" href="https://modelcontextprotocol.io/">
+    Official tutorials, user guides, and reference documentation.
+  </Card>
+  <Card title="MCP Specification" icon="file-text" href="https://modelcontextprotocol.io/specification/2025-11-25">
+    The full protocol specification (version 2025-11-25).
+  </Card>
+  <Card title="MCP GitHub" icon="github" href="https://github.com/modelcontextprotocol">
+    SDKs in Python, TypeScript, Java, C#, and more.
+  </Card>
+  <Card title="MCP Community" icon="message-circle" href="https://github.com/orgs/modelcontextprotocol/discussions">
+    Discussions, questions, and knowledge sharing with other MCP developers.
+  </Card>
+</CardGroup>

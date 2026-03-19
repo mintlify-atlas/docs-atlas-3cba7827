@@ -1,0 +1,413 @@
+---
+title: "Multi-Modal Integration"
+description: "Build MCP servers that handle images, audio, and multi-modal data — enabling richer AI interactions beyond text."
+---
+
+## Overview
+
+Multi-modal applications extend AI capabilities beyond text, enabling richer interactions with images, audio, video, and other data types. The Model Context Protocol provides a framework for building servers that process multiple modalities in a unified, extensible way.
+
+<CardGroup cols={2}>
+  <Card title="Image analysis" icon="image">
+    Detect objects, extract text, and analyze visual content
+  </Card>
+  <Card title="Audio processing" icon="microphone">
+    Transcribe speech and process audio files
+  </Card>
+  <Card title="Image generation" icon="paintbrush">
+    Generate images from text descriptions
+  </Card>
+  <Card title="Unified context" icon="arrows-merge">
+    Maintain context across modalities in a single server
+  </Card>
+</CardGroup>
+
+## Architecture for multi-modal support
+
+Multi-modal MCP implementations typically involve:
+
+- **Modal-specific parsers**: Convert different media types into formats the model can process
+- **Modal-specific tools**: Designed to handle specific modalities (image analysis, audio processing)
+- **Unified context management**: Maintain context across different modalities within a session
+- **Multi-modal response generation**: Return responses that may combine text, images, and metadata
+
+## Image analysis tool
+
+### C# Implementation
+
+```csharp
+using ModelContextProtocol.SDK.Server;
+using ModelContextProtocol.SDK.Server.Tools;
+using ModelContextProtocol.SDK.Server.Content;
+using System.Text.Json;
+using System.IO;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+
+namespace MultiModalMcpExample
+{
+    public class ImageAnalysisTool : ITool
+    {
+        private readonly IImageAnalysisService _imageService;
+
+        public ImageAnalysisTool(IImageAnalysisService imageService)
+        {
+            _imageService = imageService;
+        }
+
+        public string Name => "imageAnalysis";
+        public string Description => "Analyzes image content and extracts information";
+
+        public ToolDefinition GetDefinition()
+        {
+            return new ToolDefinition
+            {
+                Name = Name,
+                Description = Description,
+                Parameters = new Dictionary<string, ParameterDefinition>
+                {
+                    ["imageUrl"] = new ParameterDefinition
+                    {
+                        Type = ParameterType.String,
+                        Description = "URL to the image to analyze"
+                    },
+                    ["analysisType"] = new ParameterDefinition
+                    {
+                        Type = ParameterType.String,
+                        Description = "Type of analysis to perform",
+                        Enum = new[] { "general", "objects", "text", "faces" },
+                        Default = "general"
+                    }
+                },
+                Required = new[] { "imageUrl" }
+            };
+        }
+
+        public async Task<ToolResponse> ExecuteAsync(IDictionary<string, object> parameters)
+        {
+            string imageUrl = parameters["imageUrl"].ToString();
+            string analysisType = parameters.ContainsKey("analysisType")
+                ? parameters["analysisType"].ToString()
+                : "general";
+
+            byte[] imageData = await DownloadImageAsync(imageUrl);
+
+            var analysisResult = analysisType switch
+            {
+                "objects" => await _imageService.DetectObjectsAsync(imageData),
+                "text"    => await _imageService.RecognizeTextAsync(imageData),
+                "faces"   => await _imageService.DetectFacesAsync(imageData),
+                _         => await _imageService.AnalyzeGeneralAsync(imageData)
+            };
+
+            var content = new List<ContentItem>
+            {
+                new ContentItem
+                {
+                    Type = ContentType.Text,
+                    Text = JsonSerializer.Serialize(analysisResult)
+                }
+            };
+
+            return new ToolResponse { Content = content, IsError = false };
+        }
+
+        private async Task<byte[]> DownloadImageAsync(string url)
+        {
+            using var httpClient = new HttpClient();
+            return await httpClient.GetByteArrayAsync(url);
+        }
+    }
+
+    public class MultiModalMcpServer
+    {
+        public static async Task Main(string[] args)
+        {
+            var server = new McpServer(
+                name: "Multi-Modal MCP Server",
+                version: "1.0.0"
+            );
+
+            var serverOptions = new McpServerOptions
+            {
+                MaxRequestSize = 10 * 1024 * 1024, // 10MB for images
+                SupportedContentTypes = new[]
+                {
+                    "image/jpeg",
+                    "image/png",
+                    "text/plain",
+                    "application/json"
+                }
+            };
+
+            var imageService = new ComputerVisionService();
+            server.AddTool(new ImageAnalysisTool(imageService));
+
+            // Register additional modality tools
+            services.AddMcpTool<TextAnalysisTool>();
+            services.AddMcpTool<ImageAnalysisTool>();
+            services.AddMcpTool<DocumentGenerationTool>();
+        }
+    }
+}
+```
+
+<Note>
+  Set `MaxRequestSize` to accommodate image payloads. A 10 MB limit is a reasonable starting point; increase for higher-resolution images or video frames.
+</Note>
+
+## Audio transcription tool
+
+### Java Implementation
+
+```java
+package com.example.mcp.multimodal;
+
+import com.mcp.server.McpServer;
+import com.mcp.tools.Tool;
+import com.mcp.tools.ToolRequest;
+import com.mcp.tools.ToolResponse;
+import com.mcp.tools.ToolExecutionException;
+import com.example.audio.AudioProcessor;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
+public class AudioTranscriptionTool implements Tool {
+    private final AudioProcessor audioProcessor;
+
+    public AudioTranscriptionTool(AudioProcessor audioProcessor) {
+        this.audioProcessor = audioProcessor;
+    }
+
+    @Override
+    public String getName() { return "audioTranscription"; }
+
+    @Override
+    public String getDescription() {
+        return "Transcribes speech from audio files to text";
+    }
+
+    @Override
+    public Object getSchema() {
+        Map<String, Object> schema = new HashMap<>();
+        schema.put("type", "object");
+
+        Map<String, Object> properties = new HashMap<>();
+
+        Map<String, Object> audioUrl = new HashMap<>();
+        audioUrl.put("type", "string");
+        audioUrl.put("description", "URL to the audio file to transcribe");
+
+        Map<String, Object> audioData = new HashMap<>();
+        audioData.put("type", "string");
+        audioData.put("description", "Base64-encoded audio data (alternative to URL)");
+
+        Map<String, Object> language = new HashMap<>();
+        language.put("type", "string");
+        language.put("description", "Language code (e.g., 'en-US', 'es-ES')");
+        language.put("default", "en-US");
+
+        properties.put("audioUrl", audioUrl);
+        properties.put("audioData", audioData);
+        properties.put("language", language);
+
+        schema.put("properties", properties);
+        schema.put("required", Arrays.asList("audioUrl"));
+        return schema;
+    }
+
+    @Override
+    public ToolResponse execute(ToolRequest request) {
+        try {
+            byte[] audioData;
+            String language = request.getParameters().has("language")
+                ? request.getParameters().get("language").asText()
+                : "en-US";
+
+            if (request.getParameters().has("audioUrl")) {
+                String audioUrl = request.getParameters().get("audioUrl").asText();
+                audioData = downloadAudio(audioUrl);
+            } else if (request.getParameters().has("audioData")) {
+                String base64Audio = request.getParameters().get("audioData").asText();
+                audioData = Base64.getDecoder().decode(base64Audio);
+            } else {
+                throw new ToolExecutionException(
+                    "Either audioUrl or audioData must be provided");
+            }
+
+            Map<String, Object> transcriptionResult =
+                audioProcessor.transcribe(audioData, language);
+
+            return new ToolResponse.Builder()
+                .setResult(transcriptionResult)
+                .build();
+        } catch (Exception ex) {
+            throw new ToolExecutionException(
+                "Audio transcription failed: " + ex.getMessage(), ex);
+        }
+    }
+}
+
+public class MultiModalApplication {
+    public static void main(String[] args) {
+        AudioProcessor audioProcessor = new AudioProcessor();
+        ImageProcessor imageProcessor = new ImageProcessor();
+
+        McpServer server = new McpServer.Builder()
+            .setName("Multi-Modal MCP Server")
+            .setVersion("1.0.0")
+            .setPort(5000)
+            .setMaxRequestSize(20 * 1024 * 1024) // 20MB for audio/video
+            .build();
+
+        server.registerTool(new AudioTranscriptionTool(audioProcessor));
+        server.registerTool(new ImageAnalysisTool(imageProcessor));
+        server.registerTool(new VideoProcessingTool());
+
+        server.start();
+        System.out.println("Multi-Modal MCP Server started on port 5000");
+    }
+}
+```
+
+## Image generation tool
+
+### Python Implementation
+
+```python
+from mcp_server import McpServer
+from mcp_tools import Tool, ToolRequest, ToolResponse, ToolExecutionException
+import base64
+from PIL import Image
+import io
+from typing import Dict, Any, List, Optional
+
+class ImageGenerationTool(Tool):
+    def get_name(self):
+        return "imageGeneration"
+
+    def get_description(self):
+        return "Generates images based on text descriptions"
+
+    def get_schema(self):
+        return {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the image to generate"
+                },
+                "style": {
+                    "type": "string",
+                    "enum": ["realistic", "artistic", "cartoon", "sketch"],
+                    "default": "realistic"
+                },
+                "width":  {"type": "integer", "default": 512},
+                "height": {"type": "integer", "default": 512}
+            },
+            "required": ["prompt"]
+        }
+
+    async def execute_async(self, request: ToolRequest) -> ToolResponse:
+        try:
+            prompt  = request.parameters.get("prompt")
+            style   = request.parameters.get("style", "realistic")
+            width   = request.parameters.get("width", 512)
+            height  = request.parameters.get("height", 512)
+
+            image_data = await self._generate_image(prompt, style, width, height)
+
+            buffered = io.BytesIO()
+            image_data.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+
+            return ToolResponse(
+                result={
+                    "imageBase64": img_str,
+                    "format": "image/png",
+                    "width": width,
+                    "height": height,
+                    "generationPrompt": prompt,
+                    "style": style
+                }
+            )
+        except Exception as e:
+            raise ToolExecutionException(f"Image generation failed: {str(e)}")
+
+    async def _generate_image(
+        self, prompt: str, style: str, width: int, height: int
+    ) -> Image.Image:
+        # Call your image generation API here
+        image = Image.new('RGB', (width, height), color=(73, 109, 137))
+        return image
+
+
+class MultiModalResponseHandler:
+    """Creates responses that combine text and generated images."""
+
+    def __init__(self, mcp_client):
+        self.client = mcp_client
+
+    async def create_multi_modal_response(
+        self,
+        text_content: str,
+        generate_images: bool = False,
+        image_prompts: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        response = {"text": text_content, "images": []}
+
+        if generate_images and image_prompts:
+            for prompt in image_prompts:
+                image_result = await self.client.execute_tool(
+                    "imageGeneration",
+                    {"prompt": prompt, "style": "realistic", "width": 512, "height": 512}
+                )
+                response["images"].append({
+                    "imageData": image_result.result["imageBase64"],
+                    "format": image_result.result["format"],
+                    "prompt": prompt
+                })
+
+        return response
+
+
+async def main():
+    server = McpServer(
+        name="Multi-Modal MCP Server",
+        version="1.0.0",
+        port=5000
+    )
+
+    server.register_tool(ImageGenerationTool())
+    server.register_tool(AudioAnalysisTool())
+    server.register_tool(VideoFrameExtractionTool())
+
+    await server.start()
+    print("Multi-Modal MCP Server running on port 5000")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+## Best practices
+
+<Warning>
+  Multi-modal payloads (images, audio) are significantly larger than text. Always set appropriate `MaxRequestSize` limits and consider streaming for large files to avoid memory pressure.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Content type validation" icon="check">
+    Validate MIME types before processing to prevent unexpected payloads
+  </Card>
+  <Card title="Async processing" icon="bolt">
+    Use async/await throughout to avoid blocking the server during heavy I/O
+  </Card>
+  <Card title="Base64 encoding" icon="binary">
+    Return binary results (images) as base64-encoded strings in tool responses
+  </Card>
+  <Card title="Error handling" icon="triangle-exclamation">
+    Wrap all media processing in try/catch and return descriptive error messages
+  </Card>
+</CardGroup>

@@ -1,0 +1,203 @@
+---
+title: "Scaling MCP Servers"
+description: "Scale MCP servers for enterprise deployments using horizontal scaling with load balancing, vertical scaling with resource optimization, and distributed architectures with Redis coordination."
+---
+
+## Overview
+
+For enterprise deployments, MCP implementations often need to handle high volumes of requests with minimal latency. This lesson covers horizontal scaling, vertical scaling, resource optimization, and distributed node architectures.
+
+<CardGroup cols={2}>
+  <Card title="Horizontal scaling" icon="server">
+    Deploy multiple MCP instances behind a load balancer
+  </Card>
+  <Card title="Vertical scaling" icon="chart-line">
+    Optimize a single instance with thread pools and resource constraints
+  </Card>
+  <Card title="Distributed architecture" icon="network-wired">
+    Coordinate multiple nodes via Redis for high availability
+  </Card>
+  <Card title="Resource optimization" icon="microchip">
+    Use caching, async processing, and efficient algorithms
+  </Card>
+</CardGroup>
+
+## Horizontal scaling
+
+Horizontal scaling deploys multiple MCP server instances behind a load balancer. Use a distributed cache (such as Redis) to share session state across instances.
+
+```csharp
+// ASP.NET Core: Load-balanced MCP configuration
+public class McpLoadBalancedStartup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Distributed cache via Redis
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = Configuration.GetConnectionString("RedisConnection");
+            options.InstanceName  = "MCP_";
+        });
+
+        // MCP server with distributed caching enabled
+        services.AddMcpServer(options =>
+        {
+            options.ServerName               = "Scalable MCP Server";
+            options.ServerVersion            = "1.0.0";
+            options.EnableDistributedCaching = true;
+            options.CacheExpirationMinutes   = 60;
+        });
+
+        services.AddMcpTool<HighPerformanceTool>();
+    }
+}
+```
+
+<Tip>
+  When deploying behind a load balancer, enable sticky sessions **only** if your tools require session affinity. Stateless tools scale better with round-robin distribution.
+</Tip>
+
+## Vertical scaling and resource optimization
+
+Vertical scaling tunes a single instance to handle more concurrent requests by optimizing thread pools, request limits, and timeouts.
+
+```java
+// Java: Optimized MCP server with resource constraints
+public class OptimizedMcpServer {
+    public static McpServer createOptimizedServer() {
+        int processors    = Runtime.getRuntime().availableProcessors();
+        int optimalThreads = processors * 2; // Common heuristic for I/O-bound work
+
+        ExecutorService executorService = new ThreadPoolExecutor(
+            processors,          // Core pool size
+            optimalThreads,      // Maximum pool size
+            60L,                 // Keep-alive time (seconds)
+            TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(1000),              // Request queue depth
+            new ThreadPoolExecutor.CallerRunsPolicy()    // Backpressure strategy
+        );
+
+        return new McpServer.Builder()
+            .setName("High-Performance MCP Server")
+            .setVersion("1.0.0")
+            .setPort(5000)
+            .setExecutor(executorService)
+            .setMaxRequestSize(1024 * 1024)   // 1 MB
+            .setMaxConcurrentRequests(100)
+            .setRequestTimeoutMs(5000)         // 5 seconds
+            .build();
+    }
+}
+```
+
+### Key configuration parameters
+
+| Parameter | Recommendation | Notes |
+|-----------|----------------|-------|
+| Core pool size | `availableProcessors()` | Minimum threads always alive |
+| Max pool size | `processors * 2` | For I/O-bound workloads |
+| Queue depth | 500–2000 | Tune based on burst traffic |
+| Request timeout | 3–10 seconds | Fail fast to avoid cascading |
+| Max request size | 1–10 MB | Increase for multi-modal |
+
+## Distributed architecture
+
+A distributed MCP architecture connects multiple nodes through Redis for coordination, health reporting, and tool specialization.
+
+```python
+# Python: Distributed MCP server with Redis coordination
+from mcp_server import AsyncMcpServer
+import asyncio
+import aioredis
+import uuid
+import time
+
+class DistributedMcpServer:
+    def __init__(self, node_id=None):
+        self.node_id = node_id or str(uuid.uuid4())
+        self.redis   = None
+        self.server  = None
+
+    async def initialize(self):
+        # Connect to Redis cluster
+        self.redis = await aioredis.create_redis_pool("redis://redis-master:6379")
+
+        # Register this node
+        await self.redis.sadd("mcp:nodes", self.node_id)
+        await self.redis.hset(f"mcp:node:{self.node_id}", "status", "starting")
+
+        # Create the MCP server
+        self.server = AsyncMcpServer(
+            name=f"MCP Node {self.node_id[:8]}",
+            version="1.0.0",
+            port=5000,
+            max_concurrent_requests=50
+        )
+
+        self.register_tools()
+        asyncio.create_task(self._heartbeat())
+
+        await self.server.start()
+        await self.redis.hset(f"mcp:node:{self.node_id}", "status", "running")
+        print(f"MCP Node {self.node_id[:8]} running on port 5000")
+
+    def register_tools(self):
+        # Common tools on every node
+        self.server.register_tool(CommonTool1())
+        self.server.register_tool(CommonTool2())
+
+        # Specialized tools distributed across nodes
+        shard = int(self.node_id[-1], 16) % 3
+        if shard == 0:
+            self.server.register_tool(SpecializedTool1())
+        elif shard == 1:
+            self.server.register_tool(SpecializedTool2())
+        else:
+            self.server.register_tool(SpecializedTool3())
+
+    async def _heartbeat(self):
+        """Periodic heartbeat to report health and load to Redis."""
+        while True:
+            try:
+                await self.redis.hset(
+                    f"mcp:node:{self.node_id}",
+                    mapping={
+                        "lastHeartbeat": int(time.time()),
+                        "load":          len(self.server.active_requests),
+                        "maxLoad":       self.server.max_concurrent_requests
+                    }
+                )
+                await asyncio.sleep(5)
+            except Exception as e:
+                print(f"Heartbeat error: {e}")
+                await asyncio.sleep(1)
+
+    async def shutdown(self):
+        await self.redis.hset(f"mcp:node:{self.node_id}", "status", "stopping")
+        await self.server.stop()
+        await self.redis.srem("mcp:nodes", self.node_id)
+        await self.redis.delete(f"mcp:node:{self.node_id}")
+        self.redis.close()
+        await self.redis.wait_closed()
+```
+
+## Scaling checklist
+
+<CardGroup cols={2}>
+  <Card title="Use a distributed cache" icon="database">
+    Redis or Memcached prevents session state from tying users to specific instances
+  </Card>
+  <Card title="Health check endpoints" icon="heart-pulse">
+    Expose `/health` and `/ready` endpoints so the load balancer can detect unhealthy nodes
+  </Card>
+  <Card title="Backpressure handling" icon="gauge">
+    Use `CallerRunsPolicy` or circuit breakers to prevent request queues from growing unbounded
+  </Card>
+  <Card title="Graceful shutdown" icon="power-off">
+    Drain in-flight requests before deregistering from Redis and closing the server
+  </Card>
+</CardGroup>
+
+<Warning>
+  Avoid using a single Redis instance as a single point of failure. Use Redis Sentinel or Redis Cluster in production to ensure the coordination layer remains available.
+</Warning>

@@ -1,0 +1,503 @@
+---
+title: "Lab 4: Database Design and Schema"
+description: "Design and implement the PostgreSQL retail schema with pgvector for semantic search, Row Level Security policies, sample data generation, and performance optimization."
+---
+
+## Objectives
+
+By the end of this lab you will be able to:
+
+- Design scalable multi-tenant retail database schemas
+- Implement PostgreSQL with pgvector for vector search
+- Configure Row Level Security for data isolation
+- Generate realistic sample data for testing
+- Optimize database performance for retail workloads
+- Implement backup and recovery strategies
+
+## Prerequisites
+
+- Completed [Lab 3: Environment Setup](/labs/03-setup)
+- Docker environment running with PostgreSQL
+- Basic SQL knowledge
+
+## Database architecture
+
+The database uses a **shared database, shared schema** multi-tenancy model with Row Level Security enforcing tenant isolation.
+
+```
+PostgreSQL
+└── retail schema (Shared)
+    ├── stores           ← Master tenant registry (no RLS)
+    ├── customers        ← RLS by store_id
+    ├── products         ← RLS by store_id
+    ├── sales_transactions     ← RLS by store_id
+    ├── sales_transaction_items ← RLS via join with transactions
+    └── product_embeddings     ← RLS by store_id
+```
+
+### Step 1: Enable required extensions
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- Verify the vector extension loaded correctly
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## Core schema
+
+### Stores table (tenant master)
+
+```sql
+CREATE TABLE retail.stores (
+    store_id VARCHAR(50) PRIMARY KEY,
+    store_name VARCHAR(100) NOT NULL,
+    store_location VARCHAR(100),
+    store_type VARCHAR(50),
+    region VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+INSERT INTO retail.stores (store_id, store_name, store_location, store_type, region) VALUES
+('seattle',  'Zava Retail Seattle',  'Seattle, WA',  'flagship',  'west'),
+('redmond',  'Zava Retail Redmond',  'Redmond, WA',  'standard',  'west'),
+('bellevue', 'Zava Retail Bellevue', 'Bellevue, WA', 'standard',  'west'),
+('online',   'Zava Retail Online',   'Digital',      'ecommerce', 'global');
+
+CREATE INDEX idx_stores_region ON retail.stores(region);
+CREATE INDEX idx_stores_active ON retail.stores(is_active) WHERE is_active = TRUE;
+```
+
+### Customers table
+
+```sql
+CREATE TABLE retail.customers (
+    customer_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id VARCHAR(50) NOT NULL REFERENCES retail.stores(store_id),
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone VARCHAR(20),
+    date_of_birth DATE,
+    gender VARCHAR(20),
+    customer_since DATE DEFAULT CURRENT_DATE,
+    loyalty_tier VARCHAR(20) DEFAULT 'bronze',
+    total_lifetime_value DECIMAL(10,2) DEFAULT 0.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE retail.customers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY customers_store_isolation ON retail.customers
+    FOR ALL TO mcp_user
+    USING (store_id = current_setting('app.current_store_id', true));
+
+CREATE INDEX idx_customers_store_id ON retail.customers(store_id);
+CREATE INDEX idx_customers_email ON retail.customers(email);
+CREATE INDEX idx_customers_loyalty_tier ON retail.customers(loyalty_tier);
+CREATE INDEX idx_customers_created_at ON retail.customers(created_at);
+```
+
+### Products table
+
+```sql
+CREATE TABLE retail.product_categories (
+    category_id SERIAL PRIMARY KEY,
+    category_name VARCHAR(100) NOT NULL UNIQUE,
+    parent_category_id INTEGER REFERENCES retail.product_categories(category_id),
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+INSERT INTO retail.product_categories (category_name, description) VALUES
+('Electronics', 'Electronic devices and accessories'),
+('Clothing', 'Apparel and fashion items'),
+('Home & Garden', 'Home improvement and garden supplies'),
+('Sports & Outdoors', 'Sports equipment and outdoor gear'),
+('Books & Media', 'Books, movies, and digital media'),
+('Health & Beauty', 'Health and beauty products'),
+('Automotive', 'Car parts and automotive accessories');
+
+CREATE TABLE retail.products (
+    product_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id VARCHAR(50) NOT NULL REFERENCES retail.stores(store_id),
+    sku VARCHAR(50) NOT NULL,
+    product_name VARCHAR(200) NOT NULL,
+    product_description TEXT,
+    category_id INTEGER REFERENCES retail.product_categories(category_id),
+    brand VARCHAR(100),
+    model VARCHAR(100),
+    color VARCHAR(50),
+    size VARCHAR(50),
+    weight_kg DECIMAL(8,3),
+    price DECIMAL(10,2) NOT NULL,
+    cost DECIMAL(10,2),
+    current_stock INTEGER DEFAULT 0,
+    minimum_stock INTEGER DEFAULT 0,
+    reorder_point INTEGER DEFAULT 10,
+    supplier_name VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_featured BOOLEAN DEFAULT FALSE,
+    rating_average DECIMAL(3,2) DEFAULT 0.00,
+    rating_count INTEGER DEFAULT 0,
+    tags TEXT[],
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_sku_per_store UNIQUE (store_id, sku)
+);
+
+ALTER TABLE retail.products ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY products_store_isolation ON retail.products
+    FOR ALL TO mcp_user
+    USING (store_id = current_setting('app.current_store_id', true));
+
+-- Comprehensive indexes
+CREATE INDEX idx_products_store_id ON retail.products(store_id);
+CREATE INDEX idx_products_category ON retail.products(category_id);
+CREATE INDEX idx_products_brand ON retail.products(brand);
+CREATE INDEX idx_products_price ON retail.products(price);
+CREATE INDEX idx_products_stock ON retail.products(current_stock);
+CREATE INDEX idx_products_active ON retail.products(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_products_tags ON retail.products USING GIN(tags);
+CREATE INDEX idx_products_metadata ON retail.products USING GIN(metadata);
+CREATE INDEX idx_products_text_search ON retail.products USING GIN(
+    to_tsvector('english', product_name || ' ' || COALESCE(product_description, '') || ' ' || COALESCE(brand, ''))
+);
+```
+
+### Sales transactions
+
+```sql
+CREATE TABLE retail.sales_transactions (
+    transaction_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id VARCHAR(50) NOT NULL REFERENCES retail.stores(store_id),
+    customer_id UUID REFERENCES retail.customers(customer_id),
+    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    transaction_type VARCHAR(20) DEFAULT 'sale',
+    payment_method VARCHAR(50),
+    subtotal DECIMAL(10,2) NOT NULL,
+    tax_amount DECIMAL(10,2) DEFAULT 0.00,
+    discount_amount DECIMAL(10,2) DEFAULT 0.00,
+    total_amount DECIMAL(10,2) NOT NULL,
+    cashier_id VARCHAR(50),
+    register_id VARCHAR(50),
+    receipt_number VARCHAR(50),
+    notes TEXT,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE retail.sales_transaction_items (
+    item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_id UUID NOT NULL REFERENCES retail.sales_transactions(transaction_id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES retail.products(product_id),
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_price DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(10,2) NOT NULL,
+    discount_amount DECIMAL(10,2) DEFAULT 0.00,
+    tax_amount DECIMAL(10,2) DEFAULT 0.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT positive_quantity CHECK (quantity > 0),
+    CONSTRAINT positive_unit_price CHECK (unit_price >= 0)
+);
+
+ALTER TABLE retail.sales_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retail.sales_transaction_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY sales_transactions_store_isolation ON retail.sales_transactions
+    FOR ALL TO mcp_user
+    USING (store_id = current_setting('app.current_store_id', true));
+
+CREATE POLICY sales_transaction_items_store_isolation ON retail.sales_transaction_items
+    FOR ALL TO mcp_user
+    USING (
+        transaction_id IN (
+            SELECT transaction_id
+            FROM retail.sales_transactions
+            WHERE store_id = current_setting('app.current_store_id', true)
+        )
+    );
+
+CREATE INDEX idx_sales_transactions_store_id ON retail.sales_transactions(store_id);
+CREATE INDEX idx_sales_transactions_customer_id ON retail.sales_transactions(customer_id);
+CREATE INDEX idx_sales_transactions_date ON retail.sales_transactions(transaction_date);
+```
+
+## Vector search implementation
+
+### Product embeddings table
+
+```sql
+CREATE TABLE retail.product_embeddings (
+    embedding_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID NOT NULL REFERENCES retail.products(product_id) ON DELETE CASCADE,
+    store_id VARCHAR(50) NOT NULL REFERENCES retail.stores(store_id),
+    embedding_text TEXT NOT NULL,
+    embedding vector(1536),              -- text-embedding-3-small dimension
+    embedding_model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_product_embedding UNIQUE (product_id, embedding_model)
+);
+
+ALTER TABLE retail.product_embeddings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY product_embeddings_store_isolation ON retail.product_embeddings
+    FOR ALL TO mcp_user
+    USING (store_id = current_setting('app.current_store_id', true));
+
+-- HNSW index for fast approximate nearest-neighbor search
+CREATE INDEX idx_product_embeddings_vector ON retail.product_embeddings
+USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX idx_product_embeddings_product_id ON retail.product_embeddings(product_id);
+CREATE INDEX idx_product_embeddings_store_id ON retail.product_embeddings(store_id);
+```
+
+### Similarity search function
+
+```sql
+CREATE OR REPLACE FUNCTION retail.search_products_by_similarity(
+    search_embedding vector(1536),
+    similarity_threshold float DEFAULT 0.7,
+    max_results integer DEFAULT 20
+)
+RETURNS TABLE (
+    product_id UUID,
+    product_name VARCHAR(200),
+    product_description TEXT,
+    brand VARCHAR(100),
+    price DECIMAL(10,2),
+    similarity_score float
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        p.product_id,
+        p.product_name,
+        p.product_description,
+        p.brand,
+        p.price,
+        1 - (pe.embedding <=> search_embedding) as similarity_score
+    FROM retail.product_embeddings pe
+    JOIN retail.products p ON pe.product_id = p.product_id
+    WHERE
+        pe.store_id = current_setting('app.current_store_id', true)
+        AND p.is_active = TRUE
+        AND 1 - (pe.embedding <=> search_embedding) >= similarity_threshold
+    ORDER BY pe.embedding <=> search_embedding
+    LIMIT max_results;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION retail.search_products_by_similarity TO mcp_user;
+```
+
+## Sample data generation
+
+```python
+# scripts/generate_sample_data.py
+"""Generate realistic sample data for the Zava Retail database."""
+import asyncio
+import asyncpg
+import random
+from faker import Faker
+
+fake = Faker()
+
+class SampleDataGenerator:
+    def __init__(self, connection_string: str):
+        self.connection_string = connection_string
+        self.stores = ['seattle', 'redmond', 'bellevue', 'online']
+
+        self.product_data = {
+            'Electronics': {
+                'brands': ['Apple', 'Samsung', 'Sony', 'LG', 'HP', 'Dell'],
+                'items': ['Smartphone', 'Laptop', 'Tablet', 'Headphones', 'Smart TV']
+            },
+            'Clothing': {
+                'brands': ['Nike', 'Adidas', 'Zara', 'H&M', "Levi's"],
+                'items': ['T-Shirt', 'Jeans', 'Dress', 'Jacket', 'Sneakers']
+            },
+            'Home & Garden': {
+                'brands': ['IKEA', 'Home Depot', 'Wayfair'],
+                'items': ['Sofa', 'Dining Table', 'Lamp', 'Garden Tool', 'Plant Pot']
+            }
+        }
+
+    async def generate_all_data(self):
+        conn = await asyncpg.connect(self.connection_string)
+        try:
+            print("Generating customers...")
+            customers = await self._generate_customers(conn, 2000)
+
+            print("Generating products...")
+            products = await self._generate_products(conn, 500)
+
+            print("Generating sales transactions...")
+            await self._generate_sales_transactions(conn, customers, products, 5000)
+
+            print("Sample data generation complete!")
+        finally:
+            await conn.close()
+
+    async def _generate_customers(self, conn, count: int):
+        customers = []
+        for _ in range(count):
+            store_id = random.choice(self.stores)
+            customer_id = await conn.fetchval("""
+                INSERT INTO retail.customers (
+                    store_id, first_name, last_name, email, phone,
+                    date_of_birth, gender, customer_since, loyalty_tier
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING customer_id
+            """,
+                store_id, fake.first_name(), fake.last_name(),
+                fake.unique.email(), fake.phone_number()[:20],
+                fake.date_of_birth(minimum_age=18, maximum_age=80),
+                random.choice(['Male', 'Female', 'Other', 'Prefer not to say']),
+                fake.date_between(start_date='-5y', end_date='today'),
+                random.choices(['bronze', 'silver', 'gold', 'platinum'],
+                               weights=[50, 30, 15, 5])[0]
+            )
+            customers.append({'customer_id': customer_id, 'store_id': store_id})
+        return customers
+
+if __name__ == "__main__":
+    import os
+    generator = SampleDataGenerator(
+        f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+        f"@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DB')}"
+    )
+    asyncio.run(generator.generate_all_data())
+```
+
+## Performance optimization
+
+### PostgreSQL configuration
+
+```sql
+-- Add to postgresql.conf for better performance
+-- Memory settings
+-- shared_buffers = '256MB'
+-- effective_cache_size = '1GB'
+-- work_mem = '4MB'
+-- maintenance_work_mem = '64MB'
+
+-- Connection settings
+-- max_connections = 100
+
+-- Query planner (SSD-optimized)
+-- random_page_cost = 1.1
+-- effective_io_concurrency = 200
+
+-- Logging
+-- log_min_duration_statement = 1000  -- Log queries > 1 second
+```
+
+### Monitoring views
+
+```sql
+-- Slow queries (requires pg_stat_statements extension)
+CREATE VIEW retail.slow_queries AS
+SELECT
+    query,
+    calls,
+    total_exec_time,
+    mean_exec_time,
+    max_exec_time,
+    rows,
+    100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) AS hit_percent
+FROM pg_stat_statements
+WHERE mean_exec_time > 100
+ORDER BY mean_exec_time DESC;
+
+-- Table sizes and activity
+CREATE VIEW retail.table_stats AS
+SELECT
+    schemaname,
+    tablename,
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
+    pg_stat_get_tuples_inserted(c.oid) as inserts,
+    pg_stat_get_tuples_updated(c.oid) as updates,
+    pg_stat_get_tuples_deleted(c.oid) as deletes,
+    pg_stat_get_live_tuples(c.oid) as live_tuples
+FROM pg_tables pt
+JOIN pg_class c ON c.relname = pt.tablename
+WHERE schemaname = 'retail'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+```
+
+## Backup and recovery
+
+### Backup script
+
+```bash
+#!/bin/bash
+# scripts/backup_database.sh
+DB_HOST="${POSTGRES_HOST:-localhost}"
+DB_NAME="${POSTGRES_DB:-retail_db}"
+DB_USER="${POSTGRES_USER:-postgres}"
+BACKUP_DIR="/backups/postgresql"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p "$BACKUP_DIR"
+
+pg_dump \
+    --host="$DB_HOST" \
+    --username="$DB_USER" \
+    --dbname="$DB_NAME" \
+    --verbose \
+    --clean \
+    --create \
+    --if-exists \
+    --format=custom \
+    --file="$BACKUP_DIR/retail_backup_$TIMESTAMP.dump"
+
+gzip "$BACKUP_DIR/retail_backup_$TIMESTAMP.dump"
+echo "Backup complete: retail_backup_$TIMESTAMP.dump.gz"
+```
+
+### Restore script
+
+```bash
+#!/bin/bash
+# scripts/restore_database.sh
+BACKUP_FILE="$1"
+TARGET_DB="${2:-retail_db_restored}"
+
+createdb --host="$DB_HOST" --username="$DB_USER" "$TARGET_DB"
+
+gunzip -c "$BACKUP_FILE" | pg_restore \
+    --host="$DB_HOST" \
+    --username="$DB_USER" \
+    --dbname="$TARGET_DB" \
+    --verbose \
+    --clean \
+    --if-exists
+
+echo "Restoration complete: $TARGET_DB"
+```
+
+## Key takeaways
+
+- **Shared schema with RLS** enables cost-effective multi-tenancy with strong isolation
+- **pgvector HNSW indexes** provide fast approximate nearest-neighbor search for semantic queries
+- **GIN indexes** on `tags` and `metadata` columns support flexible filtering
+- **Full-text search indexes** on product name/description enable keyword fallback
+- **Sample data generation** with realistic distributions aids in performance testing
+- **Automated backups** with cloud upload protect against data loss
+
+<Card title="Next: Lab 5 — MCP Server Implementation" icon="arrow-right" href="/labs/05-mcp-server">
+  Build the FastMCP server that connects to this database, implement database query tools, and configure health endpoints.
+</Card>

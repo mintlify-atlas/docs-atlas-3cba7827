@@ -1,0 +1,323 @@
+---
+title: "Building an MCP Client"
+description: "Write a client that connects to an MCP server and programmatically lists and invokes its tools, resources, and prompts."
+---
+
+The MCP Inspector is great for manual exploration, but real integrations need a programmatic client. In this lesson you write a client from scratch in your chosen language and verify it can connect to a server, list capabilities, and invoke tools.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Understand what an MCP client does and why you need one
+- Write a client that connects to an MCP server over stdio
+- List and invoke tools, resources, and prompts programmatically
+- Run both client and server together in a local workflow
+
+## What a client does
+
+An MCP client:
+
+- Imports the MCP SDK and a transport module
+- Instantiates a transport that knows how to start the server process
+- Creates a `Client` object and connects it to the transport
+- Calls `listTools`, `listResources`, `listPrompts` to discover server capabilities
+- Calls `callTool`, `readResource`, `getPrompt` to invoke them
+
+## Example client
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const transport = new StdioClientTransport({
+  command: "node",
+  args: ["build/index.js"]
+});
+
+const client = new Client({ name: "example-client", version: "1.0.0" });
+await client.connect(transport);
+
+// List capabilities
+const tools = await client.listTools();
+const resources = await client.listResources();
+const prompts = await client.listPrompts();
+
+// Call a tool
+const result = await client.callTool({
+  name: "add",
+  arguments: { a: 5, b: 3 }
+});
+
+// Read a resource
+const resource = await client.readResource({ uri: "greeting://world" });
+
+// Get a prompt
+const prompt = await client.getPrompt({
+  name: "review-code",
+  arguments: { code: "console.log('hello')" }
+});
+```
+
+```python Python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+server_params = StdioServerParameters(
+    command="mcp",
+    args=["run", "server.py"],
+)
+
+async def run():
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            # List capabilities
+            resources = await session.list_resources()
+            tools = await session.list_tools()
+
+            # Call a tool
+            result = await session.call_tool("add", arguments={"a": 1, "b": 7})
+            print(result.content)
+
+            # Read a resource
+            content, mime_type = await session.read_resource("greeting://hello")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(run())
+```
+
+```csharp .NET
+using ModelContextProtocol.Client;
+
+var clientTransport = new StdioClientTransport(new()
+{
+    Name = "Demo Server",
+    Command = "dotnet",
+    Arguments = ["run", "--project", "path/to/server.csproj"],
+});
+
+await using var mcpClient = await McpClient.CreateAsync(clientTransport);
+
+// List tools
+foreach (var tool in await mcpClient.ListToolsAsync())
+    Console.WriteLine($"{tool.Name} ({tool.Description})");
+
+// Call a tool
+var result = await mcpClient.CallToolAsync(
+    "Add",
+    new Dictionary<string, object?>() { ["a"] = 1, ["b"] = 3 },
+    cancellationToken: CancellationToken.None);
+Console.WriteLine(result.Content.First(c => c.Type == "text").Text);
+```
+
+```java Java
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.transport.WebFluxSseClientTransport;
+import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
+import org.springframework.web.reactive.function.client.WebClient;
+import java.util.Map;
+
+var transport = new WebFluxSseClientTransport(
+    WebClient.builder().baseUrl("http://localhost:8080"));
+var client = McpClient.sync(transport).build();
+client.initialize();
+
+// List tools
+var toolsList = client.listTools();
+System.out.println("Available Tools = " + toolsList);
+
+// Call tools
+CallToolResult result = client.callTool(
+    new CallToolRequest("add", Map.of("a", 5.0, "b", 3.0)));
+System.out.println("Add Result = " + result);
+```
+
+</CodeGroup>
+
+## Step-by-step walkthrough
+
+<Steps>
+  <Step title="Import the libraries">
+    You need two things: the `Client` class and a transport. For local servers, use stdio transport. For HTTP servers, use SSE or Streamable HTTP transport.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+        import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from mcp import ClientSession, StdioServerParameters, types
+        from mcp.client.stdio import stdio_client
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Instantiate client and transport">
+    The stdio transport takes `command` and `args` — the exact command used to start the server process. The client connects through that transport.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        const transport = new StdioClientTransport({
+          command: "node",
+          args: ["server.js"]
+        });
+
+        const client = new Client({ name: "example-client", version: "1.0.0" });
+        await client.connect(transport);
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        server_params = StdioServerParameters(
+            command="mcp",
+            args=["run", "server.py"],
+        )
+
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="List server capabilities">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        const tools = await client.listTools();
+        const resources = await client.listResources();
+        const prompts = await client.listPrompts();
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        resources = await session.list_resources()
+        tools = await session.list_tools()
+        for tool in tools.tools:
+            print("Tool:", tool.name)
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```csharp
+        foreach (var tool in await mcpClient.ListToolsAsync())
+            Console.WriteLine($"{tool.Name} ({tool.Description})");
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java
+        ListToolsResult toolsList = client.listTools();
+        System.out.println("Available Tools = " + toolsList);
+        client.ping(); // verify connection
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Invoke features">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        // Call a tool
+        const result = await client.callTool({
+          name: "add",
+          arguments: { a: 5, b: 3 }
+        });
+
+        // Read a resource
+        const resource = await client.readResource({
+          uri: "greeting://world"
+        });
+
+        // Get a prompt
+        const promptResult = await client.getPrompt({
+          name: "review-code",
+          arguments: { code: "console.log('hello')" }
+        });
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        # Read a resource
+        content, mime_type = await session.read_resource("greeting://hello")
+
+        # Call a tool
+        result = await session.call_tool("add", arguments={"a": 1, "b": 7})
+        print(result.content)
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```csharp
+        var result = await mcpClient.CallToolAsync(
+            "Add",
+            new Dictionary<string, object?>() { ["a"] = 1, ["b"] = 3 },
+            cancellationToken: CancellationToken.None);
+        Console.WriteLine(result.Content.First(c => c.Type == "text").Text);
+        // Sum 4
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java
+        CallToolResult resultAdd = client.callTool(
+            new CallToolRequest("add", Map.of("a", 5.0, "b", 3.0)));
+        CallToolResult resultSubtract = client.callTool(
+            new CallToolRequest("subtract", Map.of("a", 10.0, "b", 4.0)));
+        System.out.println("Subtract Result = " + resultSubtract);
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Run the client">
+    <Tabs>
+      <Tab title="TypeScript">
+        Add to `package.json` scripts: `"client": "tsc && node build/client.js"`, then:
+        ```bash
+        npm run client
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```bash
+        python client.py
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```bash
+        dotnet run
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        ./mvnw clean compile
+        ./mvnw exec:java -Dexec.mainClass="com.microsoft.mcp.sample.client.SDKClient"
+        ```
+      </Tab>
+    </Tabs>
+
+    You should see output similar to:
+
+    ```text
+    Prompt: Please review this code: console.log("hello");
+    Resource template: file
+    Tool result: { content: [ { type: 'text', text: '9' } ] }
+    ```
+  </Step>
+</Steps>
+
+## Key takeaways
+
+- A client can discover and invoke any capability on a server — tools, resources, and prompts.
+- The stdio transport starts the server as a child process, so you don't need to manage it separately.
+- A programmatic client is ideal for automated workflows and CI/CD pipelines.
+- In the next lesson, you'll add an LLM to the client so users interact via natural language.

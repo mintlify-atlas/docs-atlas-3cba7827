@@ -1,0 +1,278 @@
+---
+title: "Routing"
+description: "Direct MCP requests to the most appropriate models, tools, and services using content-based routing, intelligent load balancing, and dynamic tool routing."
+---
+
+## Overview
+
+Routing in MCP involves directing requests to the most suitable models or services based on content type, user context, and system load — ensuring efficient processing and optimal resource utilization.
+
+<CardGroup cols={3}>
+  <Card title="Content-based routing" icon="route">
+    Route to specialized models based on request type (code, creative, scientific)
+  </Card>
+  <Card title="Load balancing" icon="scale-balanced">
+    Distribute requests across nodes using round-robin, response time, or content-aware strategies
+  </Card>
+  <Card title="Dynamic tool routing" icon="wrench">
+    Route tool calls to regional endpoints, specific API versions, or latency-optimized backends
+  </Card>
+</CardGroup>
+
+## Content-based routing
+
+Content-based routing directs requests to specialized services based on what the request contains. Code generation goes to a code model; creative writing goes to a creative model.
+
+```csharp
+// .NET Example: Content-based routing
+public class ContentBasedRouter
+{
+    private readonly Dictionary<string, McpClient> _specializedClients;
+    private readonly RoutingClassifier _classifier;
+
+    public ContentBasedRouter()
+    {
+        _specializedClients = new Dictionary<string, McpClient>
+        {
+            ["code"]       = new McpClient("https://code-specialized-mcp.com"),
+            ["creative"]   = new McpClient("https://creative-specialized-mcp.com"),
+            ["scientific"] = new McpClient("https://scientific-specialized-mcp.com"),
+            ["general"]    = new McpClient("https://general-mcp.com")
+        };
+        _classifier = new RoutingClassifier();
+    }
+
+    public async Task<McpResponse> RouteAndProcessAsync(
+        string prompt,
+        IDictionary<string, object> parameters = null)
+    {
+        string category = await _classifier.ClassifyPromptAsync(prompt);
+
+        var client = _specializedClients.ContainsKey(category)
+            ? _specializedClients[category]
+            : _specializedClients["general"];
+
+        Console.WriteLine($"Routing to {category} specialized service");
+        return await client.SendPromptAsync(prompt, parameters);
+    }
+
+    private class RoutingClassifier
+    {
+        public Task<string> ClassifyPromptAsync(string prompt)
+        {
+            prompt = prompt.ToLowerInvariant();
+
+            if (prompt.Contains("code") || prompt.Contains("function") ||
+                prompt.Contains("program") || prompt.Contains("algorithm"))
+                return Task.FromResult("code");
+
+            if (prompt.Contains("story") || prompt.Contains("creative") ||
+                prompt.Contains("imagine") || prompt.Contains("design"))
+                return Task.FromResult("creative");
+
+            if (prompt.Contains("science") || prompt.Contains("research") ||
+                prompt.Contains("analyze") || prompt.Contains("study"))
+                return Task.FromResult("scientific");
+
+            return Task.FromResult("general");
+        }
+    }
+}
+```
+
+## Intelligent load balancing
+
+Load balancing optimizes resource utilization and ensures high availability. Three strategies are shown below:
+
+| Strategy | Best for |
+|----------|----------|
+| Round-robin | Even distribution, equal-capacity nodes |
+| Response time | Heterogeneous nodes, latency-sensitive workloads |
+| Content-aware | Specialized nodes optimized for specific request types |
+
+```java
+// Java: Intelligent load balancing with multiple strategies
+public class McpLoadBalancer {
+    private final List<McpServerNode> serverNodes;
+    private final LoadBalancingStrategy strategy;
+
+    public McpLoadBalancer(List<McpServerNode> nodes, LoadBalancingStrategy strategy) {
+        this.serverNodes = new ArrayList<>(nodes);
+        this.strategy = strategy;
+    }
+
+    public McpResponse processRequest(McpRequest request) {
+        McpServerNode selectedNode = strategy.selectNode(serverNodes, request);
+        try {
+            return selectedNode.processRequest(request);
+        } catch (Exception e) {
+            selectedNode.recordFailure();
+
+            List<McpServerNode> remainingNodes = new ArrayList<>(serverNodes);
+            remainingNodes.remove(selectedNode);
+
+            if (!remainingNodes.isEmpty()) {
+                McpServerNode fallbackNode = strategy.selectNode(remainingNodes, request);
+                return fallbackNode.processRequest(request);
+            }
+            throw new RuntimeException("All MCP server nodes failed");
+        }
+    }
+
+    // Round-robin strategy
+    public static class RoundRobinStrategy implements LoadBalancingStrategy {
+        private AtomicInteger counter = new AtomicInteger(0);
+
+        @Override
+        public McpServerNode selectNode(List<McpServerNode> nodes, McpRequest request) {
+            List<McpServerNode> healthyNodes = nodes.stream()
+                .filter(McpServerNode::isHealthy)
+                .collect(Collectors.toList());
+
+            if (healthyNodes.isEmpty())
+                throw new RuntimeException("No healthy nodes available");
+
+            int index = counter.getAndIncrement() % healthyNodes.size();
+            return healthyNodes.get(index);
+        }
+    }
+
+    // Weighted response time strategy
+    public static class ResponseTimeStrategy implements LoadBalancingStrategy {
+        @Override
+        public McpServerNode selectNode(List<McpServerNode> nodes, McpRequest request) {
+            return nodes.stream()
+                .filter(McpServerNode::isHealthy)
+                .min(Comparator.comparing(McpServerNode::getAverageResponseTime))
+                .orElseThrow(() -> new RuntimeException("No healthy nodes"));
+        }
+    }
+
+    // Content-aware strategy
+    public static class ContentAwareStrategy implements LoadBalancingStrategy {
+        @Override
+        public McpServerNode selectNode(List<McpServerNode> nodes, McpRequest request) {
+            boolean isCodeRequest = request.getPrompt().contains("code") ||
+                                    request.getAllowedTools().contains("codeInterpreter");
+
+            Optional<McpServerNode> specializedNode = nodes.stream()
+                .filter(McpServerNode::isHealthy)
+                .filter(node -> isCodeRequest &&
+                                node.getSpecialization().equals("code"))
+                .findFirst();
+
+            return specializedNode.orElse(
+                nodes.stream()
+                    .filter(McpServerNode::isHealthy)
+                    .min(Comparator.comparing(McpServerNode::getCurrentLoad))
+                    .orElseThrow(() -> new RuntimeException("No healthy nodes"))
+            );
+        }
+    }
+}
+```
+
+## Dynamic tool routing
+
+Tool routing directs tool calls to the most appropriate endpoint based on user context — such as regional endpoints for data residency or versioned endpoints for API compatibility.
+
+```python
+# Python: Dynamic tool routing
+class McpToolRouter:
+    def __init__(self):
+        self.tool_endpoints = {
+            "weatherTool":    "https://weather-service.example.com/api",
+            "calculatorTool": "https://calculator-service.example.com/compute",
+            "databaseTool":   "https://database-service.example.com/query",
+            "searchTool":     "https://search-service.example.com/search"
+        }
+
+        self.regional_endpoints = {
+            "us": {
+                "weatherTool": "https://us-west.weather-service.example.com/api",
+                "searchTool":  "https://us.search-service.example.com/search"
+            },
+            "europe": {
+                "weatherTool": "https://eu.weather-service.example.com/api",
+                "searchTool":  "https://eu.search-service.example.com/search"
+            }
+        }
+
+        self.tool_versions = {
+            "weatherTool": {
+                "default": "v2",
+                "v1":      "https://weather-service.example.com/api/v1",
+                "v2":      "https://weather-service.example.com/api/v2",
+                "beta":    "https://weather-service.example.com/api/beta"
+            }
+        }
+
+    async def route_tool_request(self, tool_name, parameters, user_context=None):
+        endpoint = self._select_endpoint(tool_name, parameters, user_context)
+        if not endpoint:
+            raise ValueError(f"No endpoint available for tool: {tool_name}")
+        return await self._execute_tool_request(endpoint, tool_name, parameters)
+
+    def _select_endpoint(self, tool_name, parameters, user_context=None):
+        if tool_name not in self.tool_endpoints:
+            return None
+
+        base_endpoint = self.tool_endpoints[tool_name]
+
+        # Version routing
+        if tool_name in self.tool_versions:
+            version_info = self.tool_versions[tool_name]
+            requested_version = parameters.get("_version", version_info["default"])
+            if requested_version in version_info:
+                base_endpoint = version_info[requested_version]
+
+        # Regional routing
+        if user_context and "region" in user_context:
+            user_region = user_context["region"]
+            if user_region in self.regional_endpoints:
+                regional_tools = self.regional_endpoints[user_region]
+                if tool_name in regional_tools:
+                    return regional_tools[tool_name]
+
+        return base_endpoint
+
+    async def _execute_tool_request(self, endpoint, tool_name, parameters):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                endpoint,
+                json={"toolName": tool_name, "parameters": parameters},
+                headers={"Content-Type": "application/json"}
+            ) as response:
+                if response.status == 200:
+                    return await response.json()
+                error_text = await response.text()
+                raise Exception(f"Tool execution failed: {error_text}")
+```
+
+## Routing and sampling architecture
+
+The diagram below shows how routing and sampling work together in a comprehensive MCP architecture:
+
+```
+MCP Client
+    │
+    ▼
+Request Router ──► Content Analyzer ──► Sampling Configurator
+    │
+    ▼
+Load Balancer ──► Server Pool ──► Model Selector
+                                        │
+                            ┌───────────┼───────────┐
+                            ▼           ▼           ▼
+                      Model A      Model B      Model C
+                            │           │           │
+                            └───────────┴───────────┘
+                                        │
+                                   Tool Router
+                                   │         │
+                             Primary Tools  Regional Tools
+```
+
+<Tip>
+  Combine content-aware routing with regional tool routing so that a French user's weather query is routed to both the creative-writing model (if asking in a conversational tone) **and** the EU weather endpoint (for data residency compliance).
+</Tip>

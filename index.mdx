@@ -1,97 +1,128 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "MCP for Beginners"
+description: "Learn the Model Context Protocol (MCP) through hands-on code examples in C#, Java, TypeScript, JavaScript, Rust, and Python."
+mode: "custom"
 ---
 
-## Setting up
+<div style={{background: "linear-gradient(135deg, #94cb04 0%, #6fa002 100%)", borderRadius: "12px", padding: "60px 40px", marginBottom: "40px", color: "#fff"}}>
+  <div style={{maxWidth: "700px"}}>
+    <div style={{fontSize: "13px", fontWeight: "600", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "16px", opacity: 0.85}}>Microsoft Open Source Curriculum</div>
+    <h1 style={{fontSize: "48px", fontWeight: "700", lineHeight: "1.1", marginBottom: "20px", color: "#fff"}}>Model Context Protocol for Beginners</h1>
+    <p style={{fontSize: "18px", lineHeight: "1.6", opacity: 0.9, marginBottom: "32px"}}>
+      A structured, 12-module curriculum that takes you from MCP fundamentals to production-ready AI integrations — with real code examples in C#, Java, TypeScript, JavaScript, Rust, and Python.
+    </p>
+    <div style={{display: "flex", gap: "12px", flexWrap: "wrap"}}>
+      <a href="/introduction" style={{background: "#fff", color: "#94cb04", padding: "12px 24px", borderRadius: "6px", fontWeight: "600", textDecoration: "none", fontSize: "15px"}}>Start Learning →</a>
+      <a href="/modules/00-introduction" style={{background: "rgba(255,255,255,0.15)", color: "#fff", padding: "12px 24px", borderRadius: "6px", fontWeight: "600", textDecoration: "none", fontSize: "15px", border: "1px solid rgba(255,255,255,0.3)"}}>View Curriculum</a>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={3}>
+  <Card title="12 Modules" icon="graduation-cap">
+    Structured learning from fundamentals to advanced production patterns
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="6 Languages" icon="code">
+    Complete examples in C#, Java, TypeScript, JavaScript, Rust, and Python
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="13 Hands-On Labs" icon="flask">
+    Build a production MCP server with PostgreSQL integration end-to-end
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What is MCP?
 
-Everything you need to create world-class documentation.
+The **Model Context Protocol (MCP)** is an open standard that lets AI models communicate with external tools and services in a unified, secure way. Think of it as USB for AI — a universal connector that allows any AI application to plug into any tool or data source without custom integration code.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+MCP defines a client-server architecture where:
+- **MCP Hosts** (Claude Desktop, VS Code, IDEs) initiate connections
+- **MCP Clients** maintain protocol connections within the host
+- **MCP Servers** expose tools, resources, and prompts to AI models
 
-## Need inspiration?
+<Info>
+  This curriculum is aligned with **MCP Specification 2025-11-25** — the latest stable release. MCP uses date-based versioning (YYYY-MM-DD) for clear protocol version tracking.
+</Info>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Your Learning Path
+
+<CardGroup cols={2}>
+  <Card title="Foundation (Modules 0–2)" icon="seedling" href="/modules/00-introduction">
+    Learn what MCP is, explore core concepts, and understand security principles before writing a single line of code.
+  </Card>
+  <Card title="Building Phase (Module 3)" icon="hammer" href="/modules/03-getting-started">
+    Create your first MCP server and client, integrate with VS Code, implement auth, and test your implementations.
+  </Card>
+  <Card title="Practical & Advanced (Modules 4–5)" icon="rocket" href="/modules/04-practical-implementation">
+    Dive into SDKs, debugging, pagination, Azure integration, OAuth2, real-time streaming, and enterprise scaling.
+  </Card>
+  <Card title="Mastery Phase (Modules 6–11)" icon="star" href="/modules/06-community-contributions">
+    Contribute to the ecosystem, study real-world case studies, and complete the 13-lab database integration capstone.
+  </Card>
+</CardGroup>
+
+## Complete Curriculum
+
+| Module | Topic | Description |
+|--------|-------|-------------|
+| **00** | [Introduction to MCP](/modules/00-introduction) | What MCP is and why it matters for AI development |
+| **01** | [Core Concepts](/modules/01-core-concepts) | Architecture, hosts, clients, servers, transports |
+| **02** | [Security in MCP](/modules/02-security) | Threats, best practices, and security controls |
+| **03** | [Getting Started](/modules/03-getting-started) | Environment setup, first server, first client |
+| **04** | [Practical Implementation](/modules/04-practical-implementation) | SDKs, debugging, testing, prompt templates |
+| **05** | [Advanced Topics](/modules/05-advanced-topics) | Multi-modal AI, scaling, enterprise deployment |
+| **06** | [Community Contributions](/modules/06-community-contributions) | Contributing to the MCP ecosystem |
+| **07** | [Early Adoption Insights](/modules/07-lessons-early-adoption) | Real-world implementation stories |
+| **08** | [Best Practices](/modules/08-best-practices) | Performance, fault-tolerance, resilience |
+| **09** | [Case Studies](/modules/09-case-study) | Practical implementation examples |
+| **10** | [AI Toolkit Workshop](/modules/10-ai-toolkit-workshop) | Building MCP servers with AI Toolkit |
+| **11** | [Hands-On Labs](/labs/overview) | 13-lab PostgreSQL integration capstone |
+
+## Hands-On Labs
+
+The [MCP Server Hands-On Labs](/labs/overview) are a comprehensive 13-lab series that teaches you to build a production-ready MCP server with PostgreSQL integration, semantic search, Azure deployment, and monitoring.
+
+<CardGroup cols={2}>
+  <Card title="Start the Labs" icon="play" href="/labs/overview">
+    Begin the 13-lab series to build a full production MCP server
+  </Card>
+  <Card title="View Code Samples" icon="github" href="/samples/overview">
+    Browse working code examples in all 6 supported languages
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<AccordionGroup>
+  <Accordion title="Required knowledge">
+    - Basic programming experience in at least one language (C#, Java, JavaScript, Python, TypeScript, or Rust)
+    - Understanding of the client-server model and REST/HTTP concepts
+    - Familiarity with command-line tools
+  </Accordion>
+  <Accordion title="Optional but helpful">
+    - Background in AI/ML concepts and large language models
+    - Experience with cloud platforms (Azure concepts appear in Modules 5 and 11)
+    - Docker and containerization basics (used in Lab 10)
+  </Accordion>
+  <Accordion title="Tools you'll need">
+    - A code editor (VS Code recommended — many examples show VS Code integration)
+    - Git for cloning the repository
+    - Language-specific runtimes for your chosen language (.NET, Node.js, Python, JDK, Rust)
+  </Accordion>
+</AccordionGroup>
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/microsoft/mcp-for-beginners">
+    Star the repo, open issues, and contribute examples
+  </Card>
+  <Card title="Microsoft Foundry Discord" icon="discord" href="https://discord.gg/nTYy5BXMWG">
+    Connect with fellow learners and MCP experts
+  </Card>
+  <Card title="MCP Documentation" icon="book" href="https://modelcontextprotocol.io/">
+    Official MCP documentation and specification
+  </Card>
+  <Card title="MCP Specification" icon="file-code" href="https://modelcontextprotocol.io/specification/2025-11-25">
+    Full protocol specification (2025-11-25)
+  </Card>
+</CardGroup>

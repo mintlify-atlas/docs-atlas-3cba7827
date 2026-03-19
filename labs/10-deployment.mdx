@@ -1,0 +1,552 @@
+---
+title: "Lab 10: Deployment Strategies"
+description: "Deploy the MCP retail server to production using Docker multi-stage builds, Azure Container Apps with auto-scaling, PostgreSQL Flexible Server, and automated CI/CD pipelines."
+---
+
+## Objectives
+
+By the end of this lab you will be able to:
+
+- Containerize MCP servers using Docker with multi-stage builds
+- Deploy to Azure Container Apps with secure networking
+- Configure production-grade PostgreSQL with high availability
+- Implement CI/CD pipelines for automated deployment
+- Scale applications automatically based on demand
+- Monitor production deployments with comprehensive observability
+
+## Prerequisites
+
+- Completed [Lab 9: VS Code Integration](/labs/09-vscode)
+- Azure CLI installed and authenticated
+- Azure subscription with contributor access
+
+## Step 1: Production Dockerfile
+
+Use a multi-stage build to keep the final image small and secure:
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.lock.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.lock.txt
+
+# ── Production stage ──────────────────────────────────────────────────────
+FROM python:3.11-slim AS production
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app"
+
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r mcp \
+    && useradd -r -g mcp -d /app -s /bin/bash mcp
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY --chown=mcp:mcp . .
+
+RUN mkdir -p /app/logs /app/data /tmp/mcp \
+    && chown -R mcp:mcp /app /tmp/mcp \
+    && chmod -R 755 /app
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+USER mcp
+EXPOSE 8000
+CMD ["python", "-m", "mcp_server.main"]
+```
+
+<Warning>
+  Always run as a non-root user in production containers. The `USER mcp` instruction and `useradd` setup above follow this best practice.
+</Warning>
+
+## Step 2: Docker Compose for development
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=retail_db
+      - POSTGRES_USER=mcp_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PROJECT_ENDPOINT=${PROJECT_ENDPOINT}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_DB=retail_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker-init:/docker-entrypoint-initdb.d
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d retail_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+
+networks:
+  mcp-network:
+    driver: bridge
+```
+
+## Step 3: Azure Container Apps deployment (Bicep)
+
+```bicep
+// infra/container-apps.bicep
+@description('Location for all resources')
+param location string = resourceGroup().location
+
+@description('Container App name')
+param containerAppName string
+
+@description('Container registry details')
+param containerRegistry object
+
+@secure()
+param databaseConnectionString string
+
+param azureOpenAI object
+param workspaceId string
+param environmentName string
+
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
+  name: '${environmentName}-env'
+  location: location
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: workspaceId
+      }
+    }
+  }
+}
+
+resource mcpRetailServer 'Microsoft.App/containerApps@2023-05-01' = {
+  name: containerAppName
+  location: location
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: false
+        targetPort: 8000
+        allowInsecure: false
+      }
+      registries: [{
+        server: containerRegistry.server
+        identity: containerRegistry.identity
+      }]
+      secrets: [
+        { name: 'database-connection-string'; value: databaseConnectionString }
+        { name: 'azure-openai-key'; value: azureOpenAI.apiKey }
+      ]
+    }
+    template: {
+      containers: [{
+        name: 'mcp-retail-server'
+        image: '${containerRegistry.server}/mcp-retail-server:latest'
+        resources: { cpu: json('1.0'), memory: '2Gi' }
+        env: [
+          { name: 'POSTGRES_CONNECTION_STRING'; secretRef: 'database-connection-string' }
+          { name: 'PROJECT_ENDPOINT'; value: azureOpenAI.endpoint }
+          { name: 'AZURE_OPENAI_API_KEY'; secretRef: 'azure-openai-key' }
+          { name: 'LOG_LEVEL'; value: 'INFO' }
+          { name: 'ENVIRONMENT'; value: 'production' }
+        ]
+        probes: [
+          {
+            type: 'Liveness'
+            httpGet: { path: '/health'; port: 8000; scheme: 'HTTP' }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          }
+          {
+            type: 'Readiness'
+            httpGet: { path: '/health/ready'; port: 8000; scheme: 'HTTP' }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          }
+        ]
+      }]
+      scale: {
+        minReplicas: 2
+        maxReplicas: 20
+        rules: [
+          {
+            name: 'http-scaling'
+            http: { metadata: { concurrentRequests: '10' } }
+          }
+          {
+            name: 'cpu-scaling'
+            custom: { type: 'cpu'; metadata: { type: 'Utilization'; value: '70' } }
+          }
+        ]
+      }
+    }
+  }
+}
+
+output containerAppFQDN string = mcpRetailServer.properties.configuration.ingress.fqdn
+```
+
+## Step 4: PostgreSQL Flexible Server (Bicep)
+
+```bicep
+// infra/database.bicep
+param location string = resourceGroup().location
+param serverName string
+param administratorLogin string
+
+@secure()
+param administratorPassword string
+param subnetId string
+param privateDnsZoneId string
+
+resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview' = {
+  name: serverName
+  location: location
+  sku: {
+    name: 'Standard_D4s_v3'
+    tier: 'GeneralPurpose'
+  }
+  properties: {
+    administratorLogin: administratorLogin
+    administratorLoginPassword: administratorPassword
+    version: '16'
+    storage: {
+      storageSizeGB: 128
+      autoGrow: 'Enabled'
+      type: 'PremiumSSD'
+    }
+    backup: {
+      backupRetentionDays: 35
+      geoRedundantBackup: 'Enabled'
+    }
+    highAvailability: { mode: 'ZoneRedundant' }
+    network: {
+      delegatedSubnetResourceId: subnetId
+      privateDnsZoneArmResourceId: privateDnsZoneId
+    }
+    maintenanceWindow: { dayOfWeek: 0; startHour: 2; startMinute: 0 }
+  }
+}
+
+resource retailDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03-01-preview' = {
+  parent: postgresqlServer
+  name: 'retail_db'
+  properties: { charset: 'UTF8'; collation: 'en_US.utf8' }
+}
+
+// Enable pgvector extension
+resource pgvectorExtension 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2023-03-01-preview' = {
+  parent: postgresqlServer
+  name: 'shared_preload_libraries'
+  properties: {
+    value: 'pg_stat_statements,pgaudit,vector'
+    source: 'user-override'
+  }
+}
+
+output serverFQDN string = postgresqlServer.properties.fullyQualifiedDomainName
+```
+
+## Step 5: GitHub Actions CI/CD pipeline
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy MCP Retail Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'development'
+        type: choice
+        options: [development, staging, production]
+
+env:
+  CONTAINER_REGISTRY: mcpretailregistry.azurecr.io
+  IMAGE_NAME: mcp-retail-server
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: retail_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: { python-version: '3.11', cache: 'pip' }
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock.txt pytest pytest-cov pytest-asyncio
+
+      - name: Set up test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d retail_test \
+            -f scripts/create_schema.sql
+          python scripts/generate_sample_data.py --test
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PASSWORD: postgres
+
+      - name: Run tests
+        run: pytest tests/ -v --cov=mcp_server --cov-report=xml
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PASSWORD: postgres
+
+      - uses: codecov/codecov-action@v3
+        with: { file: ./coverage.xml }
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v1
+        with: { creds: '${{ secrets.AZURE_CREDENTIALS }}' }
+
+      - name: Build and push Docker image
+        run: |
+          az acr login --name mcpretailregistry
+          IMAGE_TAG="${GITHUB_SHA::8}-$(date +%s)"
+          docker build --target production \
+            --tag $CONTAINER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+            --tag $CONTAINER_REGISTRY/$IMAGE_NAME:latest .
+          docker push $CONTAINER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+          docker push $CONTAINER_REGISTRY/$IMAGE_NAME:latest
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v1
+        with: { creds: '${{ secrets.AZURE_CREDENTIALS }}' }
+
+      - name: Deploy to staging
+        uses: azure/CLI@v1
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az deployment group create \
+              --resource-group mcp-retail-staging-rg \
+              --template-file infra/main.bicep \
+              --parameters infra/main.parameters.staging.json \
+              --parameters containerImageTag=$IMAGE_TAG
+
+            az containerapp update \
+              --name mcp-retail-server-staging \
+              --resource-group mcp-retail-staging-rg \
+              --image $CONTAINER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging]
+    if: github.event.inputs.environment == 'production'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v1
+        with: { creds: '${{ secrets.AZURE_CREDENTIALS }}' }
+
+      - name: Deploy to production with blue-green
+        uses: azure/CLI@v1
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az deployment group create \
+              --resource-group mcp-retail-prod-rg \
+              --template-file infra/main.bicep \
+              --parameters infra/main.parameters.prod.json \
+              --parameters containerImageTag=$IMAGE_TAG \
+              --parameters deploymentSlot=green
+
+            # Switch all traffic to new revision
+            az containerapp ingress traffic set \
+              --name mcp-retail-server-prod \
+              --resource-group mcp-retail-prod-rg \
+              --revision-weight latest=100
+```
+
+## Step 6: Auto-scaling configuration
+
+Azure Container Apps scales based on HTTP concurrency and CPU:
+
+- **Minimum replicas**: 2 (ensures availability during scaling events)
+- **Maximum replicas**: 20 (controls cost ceiling)
+- **HTTP scaling rule**: 1 replica per 10 concurrent requests
+- **CPU scaling rule**: scale up at 70% CPU utilization
+
+For Kubernetes deployments, use a Horizontal Pod Autoscaler:
+
+```yaml
+# k8s/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mcp-retail-server-hpa
+  namespace: mcp-retail
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mcp-retail-server
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+    scaleUp:
+      stabilizationWindowSeconds: 60   # React quickly to spikes
+      selectPolicy: Max
+```
+
+## Production security configuration
+
+```bash
+# scripts/setup-production-env.sh
+az group create --name "mcp-retail-prod-rg" --location "East US"
+
+# Key Vault for secrets
+az keyvault create \
+  --name "mcp-retail-kv-prod" \
+  --resource-group "mcp-retail-prod-rg" \
+  --location "East US" \
+  --enable-rbac-authorization true
+
+az keyvault secret set \
+  --vault-name "mcp-retail-kv-prod" \
+  --name "postgres-password" \
+  --value "${POSTGRES_PASSWORD}"
+
+# Container registry (Premium for geo-replication)
+az acr create \
+  --name "mcpretailregistry" \
+  --resource-group "mcp-retail-prod-rg" \
+  --sku Premium \
+  --admin-enabled false
+
+# Deploy infrastructure
+az deployment group create \
+  --resource-group "mcp-retail-prod-rg" \
+  --template-file "infra/main.bicep" \
+  --parameters "infra/main.parameters.prod.json"
+```
+
+## Key takeaways
+
+- **Multi-stage Docker builds** separate build dependencies from the runtime image, reducing attack surface and image size
+- **Non-root container user** is a required security practice for production deployments
+- **Bicep templates** provide repeatable, version-controlled infrastructure
+- **Zone-redundant PostgreSQL** with 35-day backup retention protects against data loss
+- **Blue-green deployment** enables zero-downtime releases with instant rollback
+- **Auto-scaling rules** based on both HTTP concurrency and CPU ensure cost-effective scaling
+
+<Card title="Next: Lab 11 — Monitoring" icon="arrow-right" href="/labs/11-monitoring">
+  Set up Application Insights, structured logging, intelligent alerting, and operational dashboards.
+</Card>

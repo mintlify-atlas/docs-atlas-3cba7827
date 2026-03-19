@@ -1,0 +1,372 @@
+---
+title: "Module 7: Lessons from Early Adoption"
+description: "Real-world MCP implementations across customer support, healthcare, financial services, and Microsoft's own production tools — with hands-on projects and emerging trends."
+---
+
+This module examines how real organizations and developers are using MCP to solve actual challenges. Through case studies and hands-on projects, you'll see how MCP enables secure, scalable AI integration that connects language models, tools, and enterprise data.
+
+## Learning objectives
+
+- Analyze real-world MCP implementations across different industries
+- Design and build complete MCP-based applications
+- Explore emerging trends and future directions in MCP technology
+- Apply best practices in actual development scenarios
+
+## Industry case studies
+
+### Case study 1: Enterprise customer support automation
+
+A multinational corporation implemented an MCP-based solution to standardize AI interactions across their customer support systems. The results:
+
+- **30% reduction** in model costs
+- **45% improvement** in response consistency
+- Enhanced compliance across global operations
+- Ability to switch between AI models without changing application code
+
+**Technical implementation (Python):**
+
+```python
+import asyncio
+from modelcontextprotocol import create_server, ServerConfig
+from modelcontextprotocol.resources import ResourceDefinition
+from modelcontextprotocol.prompts import PromptDefinition
+from modelcontextprotocol.tool import ToolDefinition
+from modelcontextprotocol.transports import create_http_transport
+
+async def main():
+    config = ServerConfig(
+        name="Enterprise Customer Support Server",
+        version="1.0.0",
+        description="MCP server for handling customer support inquiries"
+    )
+    server = create_server(config)
+
+    # Register knowledge base as a resource
+    server.resources.register(
+        ResourceDefinition(name="customer_kb",
+                           description="Customer knowledge base documentation"),
+        lambda params: get_customer_documentation(params)
+    )
+
+    # Register response templates as prompts
+    server.prompts.register(
+        PromptDefinition(name="support_template",
+                         description="Templates for customer support responses"),
+        lambda params: get_support_templates(params)
+    )
+
+    # Register ticketing as a tool
+    server.tools.register(
+        ToolDefinition(name="ticketing",
+                       description="Create and update support tickets"),
+        handle_ticketing_operations
+    )
+
+    transport = create_http_transport(port=8080)
+    await server.run(transport)
+
+asyncio.run(main())
+```
+
+### Case study 2: Healthcare diagnostic assistant
+
+A healthcare provider built MCP infrastructure to integrate multiple specialized medical AI models while keeping patient data protected:
+
+- Seamless switching between generalist and specialist models
+- Strict HIPAA-compliant privacy controls and audit trails
+- Integration with existing Electronic Health Record (EHR) systems
+
+```csharp
+// C# MCP client in a healthcare application
+public class DiagnosticAssistant
+{
+    private readonly MCPHostClient _mcpClient;
+
+    public DiagnosticAssistant(PatientContext patientContext)
+    {
+        var clientOptions = new ClientOptions
+        {
+            Name = "Healthcare Diagnostic Assistant",
+            Version = "1.0.0",
+            Security = new SecurityOptions
+            {
+                Encryption = EncryptionLevel.Medical,
+                AuditEnabled = true
+            }
+        };
+
+        _mcpClient = new MCPHostClientBuilder()
+            .WithOptions(clientOptions)
+            .WithTransport(new HttpTransport("https://healthcare-mcp.example.org"))
+            .WithAuthentication(new HIPAACompliantAuthProvider())
+            .Build();
+    }
+
+    public async Task<DiagnosticSuggestion> GetDiagnosticAssistance(
+        string symptoms, string patientHistory)
+    {
+        var response = await _mcpClient.SendPromptRequestAsync(
+            promptName: "diagnostic_assistance",
+            parameters: new Dictionary<string, object>
+            {
+                ["symptoms"] = symptoms,
+                ["patientHistory"] = patientHistory
+            });
+        return DiagnosticSuggestion.FromMCPResponse(response);
+    }
+}
+```
+
+**Results:** Improved diagnostic suggestions for physicians with full HIPAA compliance and significant reduction in context-switching between specialist systems.
+
+### Case study 3: Financial services risk analysis
+
+A financial institution standardized risk analysis across departments using MCP:
+
+- Unified interface for credit risk, fraud detection, and investment risk models
+- Strict access controls and model versioning
+- Full auditability of all AI recommendations
+- **40% faster** model deployment cycles
+
+```java
+// Java MCP server for financial risk assessment
+public class FinancialRiskMCPServer {
+    public static void main(String[] args) {
+        MCPServer server = new MCPServerBuilder()
+            .withModelProviders(
+                new ModelProvider("risk-assessment-primary",
+                    new AzureOpenAIProvider()),
+                new ModelProvider("risk-assessment-audit",
+                    new LocalLlamaProvider())
+            )
+            .withPromptTemplateDirectory("./compliance/templates")
+            .withAccessControls(new SOCCompliantAccessControl())
+            .withDataEncryption(EncryptionStandard.FINANCIAL_GRADE)
+            .withAuditLogging(new DatabaseAuditLogger())
+            .build();
+
+        server.addRequestValidator(new FinancialDataValidator());
+        server.addResponseFilter(new PII_RedactionFilter());
+        server.start(9000);
+    }
+}
+```
+
+### Case study 4: Microsoft Playwright MCP server
+
+Microsoft's [Playwright MCP server](https://github.com/microsoft/playwright-mcp) enables secure, standardized browser automation through MCP. It powers GitHub Copilot's web browsing capabilities and is available for use today.
+
+```typescript
+// TypeScript: registering Playwright browser automation tools
+import { createServer, ToolDefinition } from 'modelcontextprotocol';
+import { launch } from 'playwright';
+
+const server = createServer({
+  name: 'Playwright MCP Server',
+  version: '1.0.0',
+  description: 'MCP server for browser automation using Playwright'
+});
+
+server.tools.register(
+  new ToolDefinition({
+    name: 'navigate_and_screenshot',
+    description: 'Navigate to a URL and capture a screenshot',
+    parameters: { url: { type: 'string', description: 'The URL to visit' } }
+  }),
+  async ({ url }) => {
+    const browser = await launch();
+    const page = await browser.newPage();
+    await page.goto(url);
+    const screenshot = await page.screenshot();
+    await browser.close();
+    return { screenshot };
+  }
+);
+
+server.listen(8080);
+```
+
+**Key features:** strict access controls, detailed audit logs for all browser interactions, integration with Azure OpenAI, and powers GitHub Copilot's coding agent web browsing.
+
+### Case study 5: Azure MCP — enterprise MCP as a service
+
+[Azure MCP Server](https://aka.ms/azmcp) is Microsoft's managed enterprise MCP implementation. Organizations deploy it to get a ready-to-use, compliant MCP server platform without managing infrastructure.
+
+```yaml
+# Azure MCP server deployment configuration
+apiVersion: mcp.microsoft.com/v1
+kind: McpServer
+metadata:
+  name: enterprise-mcp-server
+spec:
+  modelProviders:
+    - name: azure-openai
+      type: AzureOpenAI
+      endpoint: https://<your-openai-resource>.openai.azure.com/
+      apiKeySecret: <your-azure-keyvault-secret>
+  tools:
+    - name: document_search
+      type: AzureAISearch
+      endpoint: https://<your-search-resource>.search.windows.net/
+      apiKeySecret: <your-azure-keyvault-secret>
+  authentication:
+    type: EntraID
+    tenantId: <your-tenant-id>
+  monitoring:
+    enabled: true
+    logAnalyticsWorkspace: <your-log-analytics-id>
+```
+
+**Results:** Reduced time-to-value for enterprise AI projects, simplified LLM and data source integration, and enhanced security and observability.
+
+### Case study 6: Azure AI Foundry MCP server
+
+[Azure AI Foundry MCP servers](https://github.com/azure-ai-foundry/mcp-foundry) demonstrate how MCP orchestrates and manages AI agents in enterprise environments.
+
+**Key features:**
+- Access to Azure's AI ecosystem including model catalogs and deployment management
+- Knowledge indexing with Azure AI Search for RAG applications
+- Evaluation tools for AI model performance and quality assurance
+- Agent management for production scenarios
+
+**Results:** Rapid prototyping, robust monitoring of AI agent workflows, and improved security and compliance.
+
+### Case study 7: Microsoft Learn Docs MCP server
+
+The [Microsoft Learn Docs MCP Server](https://github.com/MicrosoftDocs/mcp) gives AI assistants real-time access to official Microsoft documentation.
+
+**Key features:**
+- Real-time access to Microsoft docs, Azure docs, and Microsoft 365 documentation
+- Advanced semantic search that understands context and intent
+- Returns up to 10 high-quality content chunks with article titles and URLs
+
+**Why it matters:**
+- Solves the "outdated AI knowledge" problem for Microsoft technologies
+- Ensures AI assistants have access to the latest .NET, C#, Azure, and Microsoft 365 features
+- Essential for developers working with rapidly evolving Microsoft technologies
+
+## Microsoft open-source MCP repositories
+
+<AccordionGroup>
+  <Accordion title="Microsoft organization">
+    - [playwright-mcp](https://github.com/microsoft/playwright-mcp) — browser automation and testing
+    - [files-mcp-server](https://github.com/microsoft/files-mcp-server) — OneDrive MCP server for local testing
+    - [NLWeb](https://github.com/microsoft/NlWeb) — foundational layer for the AI Web combining MCP with schema.org
+  </Accordion>
+  <Accordion title="Azure-Samples organization">
+    - [mcp](https://github.com/Azure-Samples/mcp) — samples, tools, and resources for building MCP servers on Azure
+    - [mcp-auth-servers](https://github.com/Azure-Samples/mcp-auth-servers) — authentication reference servers
+    - [remote-mcp-functions-python](https://github.com/Azure-Samples/remote-mcp-functions-python) — Azure Functions + Python quickstart
+    - [remote-mcp-functions-dotnet](https://github.com/Azure-Samples/remote-mcp-functions-dotnet) — Azure Functions + .NET quickstart
+    - [remote-mcp-functions-typescript](https://github.com/Azure-Samples/remote-mcp-functions-typescript) — Azure Functions + TypeScript quickstart
+    - [remote-mcp-apim-functions-python](https://github.com/Azure-Samples/remote-mcp-apim-functions-python) — APIM as AI Gateway to remote MCP
+    - [AI-Gateway](https://github.com/Azure-Samples/AI-Gateway) — APIM and Azure OpenAI experiments including MCP
+  </Accordion>
+  <Accordion title="MCP resources directory">
+    The [MCP Resources directory](https://github.com/microsoft/mcp/tree/main/Resources) provides:
+    - Ready-to-use prompt templates for common AI tasks
+    - Example tool schemas and metadata
+    - Resource definitions for connecting to data sources and APIs
+    - Reference implementations demonstrating best-practice structure
+  </Accordion>
+</AccordionGroup>
+
+## Hands-on projects
+
+<AccordionGroup>
+  <Accordion title="Project 1: Multi-provider MCP server">
+    **Objective:** Create an MCP server that routes requests to multiple AI model providers based on request criteria.
+
+    **Requirements:**
+    - Support at least three model providers (e.g., Azure OpenAI, Anthropic, local models)
+    - Routing mechanism based on request metadata
+    - Configuration system for provider credentials
+    - Caching to optimize performance and costs
+    - Simple dashboard for monitoring usage
+
+    **Implementation steps:**
+    1. Set up the basic MCP server infrastructure
+    2. Implement provider adapters for each AI model service
+    3. Create routing logic based on request attributes
+    4. Add caching mechanisms for frequent requests
+    5. Develop a monitoring dashboard
+    6. Test with various request patterns
+  </Accordion>
+  <Accordion title="Project 2: Enterprise prompt management system">
+    **Objective:** Develop an MCP-based system for managing, versioning, and deploying prompt templates across an organization.
+
+    **Requirements:**
+    - Centralized repository for prompt templates
+    - Versioning and approval workflows
+    - Template testing with sample inputs
+    - Role-based access controls
+    - API for template retrieval and deployment
+
+    **Implementation steps:**
+    1. Design the database schema for template storage
+    2. Create the core API for template CRUD operations
+    3. Implement the versioning system
+    4. Build the approval workflow
+    5. Develop the testing framework
+    6. Integrate with an MCP server
+  </Accordion>
+  <Accordion title="Project 3: MCP-based content generation platform">
+    **Objective:** Build a content generation platform that uses MCP to ensure consistent results across different content types.
+
+    **Requirements:**
+    - Support multiple content formats (blog posts, social media, marketing copy)
+    - Template-based generation with customization options
+    - Content review and feedback system
+    - Content performance metrics tracking
+    - Content versioning and iteration support
+  </Accordion>
+</AccordionGroup>
+
+## Emerging trends
+
+<CardGroup cols={2}>
+  <Card title="Multi-modal MCP" icon="image">
+    Expansion to standardize interactions with image, audio, and video models — enabling cross-modal reasoning.
+  </Card>
+  <Card title="Federated MCP infrastructure" icon="network-wired">
+    Distributed MCP networks sharing resources across organizations using privacy-preserving computation.
+  </Card>
+  <Card title="MCP marketplaces" icon="store">
+    Ecosystems for sharing and monetizing MCP templates and plugins, with quality assurance and certification.
+  </Card>
+  <Card title="MCP for edge computing" icon="microchip">
+    Adapting MCP for resource-constrained edge devices and low-bandwidth IoT environments.
+  </Card>
+  <Card title="Regulatory frameworks" icon="scale-balanced">
+    MCP extensions for regulatory compliance with standardized audit trails and explainability interfaces.
+  </Card>
+  <Card title="Foundry MCP Playground" icon="flask" href="https://github.com/azure-ai-foundry/foundry-mcp-playground">
+    Ready-to-use environment for experimenting with MCP servers and Azure AI Foundry integrations.
+  </Card>
+</CardGroup>
+
+## Exercises
+
+1. Analyze one of the case studies and propose an alternative implementation approach
+2. Choose one of the project ideas and create a detailed technical specification
+3. Research an industry not covered here and outline how MCP could address its specific challenges
+4. Explore one of the emerging trends and create a concept for a new MCP extension to support it
+
+## Additional resources
+
+- [Azure MCP Documentation](https://aka.ms/azmcp)
+- [Playwright MCP Server](https://github.com/microsoft/playwright-mcp)
+- [Azure AI Foundry MCP Server](https://github.com/azure-ai-foundry/mcp-foundry)
+- [Foundry MCP Playground](https://github.com/azure-ai-foundry/foundry-mcp-playground)
+- [Microsoft Learn Docs MCP Server](https://github.com/MicrosoftDocs/mcp)
+- [MCP Resources Directory](https://github.com/microsoft/mcp/tree/main/Resources)
+- [OWASP MCP Top 10](https://microsoft.github.io/mcp-azure-security-guide/mcp/)
+
+<CardGroup cols={2}>
+  <Card title="Next: Best Practices" icon="arrow-right" href="/modules/08-best-practices">
+    Learn production-grade patterns for building reliable MCP servers
+  </Card>
+  <Card title="Back: Community Contributions" icon="arrow-left" href="/modules/06-community-contributions">
+    Review contributing and sharing MCP tools
+  </Card>
+</CardGroup>

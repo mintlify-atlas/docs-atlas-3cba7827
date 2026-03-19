@@ -1,0 +1,257 @@
+---
+title: "Sampling"
+description: "Configure MCP sampling parameters to control LLM output quality — covering temperature, top-p, deterministic sampling, and adaptive sampling strategies for different task types."
+---
+
+## Overview
+
+Sampling is a powerful MCP feature that allows servers to request LLM completions through the client, enabling sophisticated agentic behaviors while maintaining security and privacy. The right sampling configuration can dramatically improve response quality and performance.
+
+## How sampling works in MCP
+
+```
+1. Server sends a sampling/createMessage request to the client
+2. Client reviews the request (and can modify it)
+3. Client samples from an LLM
+4. Client reviews the completion
+5. Client returns the result to the server
+```
+
+This **human-in-the-loop design** ensures users maintain control over what the LLM sees and generates.
+
+## Sampling parameters
+
+| Parameter | Description | Typical range |
+|-----------|-------------|---------------|
+| `temperature` | Controls randomness in token selection | 0.0 – 1.0 |
+| `maxTokens` | Maximum number of tokens to generate | Integer |
+| `stopSequences` | Custom sequences that stop generation | Array of strings |
+| `metadata` | Additional provider-specific parameters | JSON object |
+
+Common extension parameters via `metadata`:
+
+| Parameter | Description | Typical range |
+|-----------|-------------|---------------|
+| `top_p` | Nucleus sampling — limits to top cumulative probability | 0.0 – 1.0 |
+| `top_k` | Limits token selection to top K options | 1 – 100 |
+| `presence_penalty` | Penalizes tokens present in the text so far | –2.0 – 2.0 |
+| `frequency_penalty` | Penalizes tokens based on frequency | –2.0 – 2.0 |
+| `seed` | Fixed random seed for reproducible results | Integer |
+
+## Request and response format
+
+```json
+{
+  "method": "sampling/createMessage",
+  "params": {
+    "messages": [
+      {
+        "role": "user",
+        "content": {
+          "type": "text",
+          "text": "What files are in the current directory?"
+        }
+      }
+    ],
+    "systemPrompt": "You are a helpful file system assistant.",
+    "includeContext": "thisServer",
+    "maxTokens": 100,
+    "temperature": 0.7
+  }
+}
+```
+
+The client returns:
+
+```json
+{
+  "model": "string",
+  "stopReason": "endTurn",
+  "role": "assistant",
+  "content": {
+    "type": "text",
+    "text": "string"
+  }
+}
+```
+
+## Configuring sampling parameters
+
+<CodeGroup>
+```csharp C#
+public class SamplingExample
+{
+    public async Task RunWithSamplingAsync()
+    {
+        var client = new McpClient("https://mcp-server-url.com");
+
+        var request = new McpRequest
+        {
+            Prompt = "Generate creative ideas for a mobile app",
+            SamplingParameters = new SamplingParameters
+            {
+                Temperature      = 0.8f,   // Higher = more creative
+                TopP             = 0.95f,  // Nucleus sampling
+                TopK             = 40,     // Limit token selection
+                FrequencyPenalty = 0.5f,   // Reduce repetition
+                PresencePenalty  = 0.2f    // Encourage diversity
+            },
+            AllowedTools = new[] { "ideaGenerator", "marketAnalyzer" }
+        };
+
+        var response = await client.SendRequestAsync(request);
+        Console.WriteLine(response.GeneratedText);
+    }
+}
+```
+
+```javascript JavaScript
+const { McpClient } = require('@mcp/client');
+
+async function demonstrateSampling() {
+    const client = new McpClient({
+        serverUrl: 'https://mcp-server-example.com',
+        apiKey: process.env.MCP_API_KEY
+    });
+
+    const creativeSampling = {
+        temperature:      0.9,   // High creativity
+        topP:             0.92,
+        frequencyPenalty: 0.6,
+        presencePenalty:  0.4
+    };
+
+    const factualSampling = {
+        temperature:      0.2,   // Deterministic / factual
+        topP:             0.85,
+        frequencyPenalty: 0.2,
+        presencePenalty:  0.1
+    };
+
+    const creativeResponse = await client.sendPrompt(
+        "Generate innovative ideas for sustainable urban transportation",
+        { allowedTools: ['ideaGenerator', 'environmentalImpactTool'], ...creativeSampling }
+    );
+
+    const factualResponse = await client.sendPrompt(
+        "Explain how electric vehicles impact carbon emissions",
+        { allowedTools: ['factChecker', 'dataAnalysisTool'], ...factualSampling }
+    );
+
+    console.log('Creative (temp=0.9):', creativeResponse.generatedText);
+    console.log('Factual  (temp=0.2):', factualResponse.generatedText);
+}
+```
+</CodeGroup>
+
+## Deterministic sampling
+
+Use a fixed seed and `temperature=0` to produce reproducible, identical outputs for the same input.
+
+```java
+// Java: Deterministic responses with fixed seed
+public class DeterministicSamplingExample {
+    public void demonstrateDeterministicResponses() {
+        McpClient client = new McpClient.Builder()
+            .setServerUrl("https://mcp-server-example.com")
+            .build();
+
+        long fixedSeed = 12345;
+
+        McpRequest request1 = new McpRequest.Builder()
+            .setPrompt("Generate a random number between 1 and 100")
+            .setSeed(fixedSeed)
+            .setTemperature(0.0)   // Zero temperature = maximum determinism
+            .build();
+
+        McpRequest request2 = new McpRequest.Builder()
+            .setPrompt("Generate a random number between 1 and 100")
+            .setSeed(fixedSeed)
+            .setTemperature(0.0)
+            .build();
+
+        McpResponse response1 = client.sendRequest(request1);
+        McpResponse response2 = client.sendRequest(request2);
+
+        System.out.println("Are responses identical: " +
+            response1.getGeneratedText().equals(response2.getGeneratedText()));
+        // Output: true
+    }
+}
+```
+
+## Dynamic sampling configuration
+
+Adapt sampling parameters based on task type and user preferences for optimal results.
+
+```python
+# Python: Dynamic sampling based on request context
+class DynamicSamplingService:
+    def __init__(self, mcp_client):
+        self.client = mcp_client
+
+    async def generate_with_adaptive_sampling(
+        self, prompt, task_type, user_preferences=None
+    ):
+        sampling_presets = {
+            "creative":   {"temperature": 0.9, "top_p": 0.95, "frequency_penalty": 0.7},
+            "factual":    {"temperature": 0.2, "top_p": 0.85, "frequency_penalty": 0.2},
+            "code":       {"temperature": 0.3, "top_p": 0.90, "frequency_penalty": 0.5},
+            "analytical": {"temperature": 0.4, "top_p": 0.92, "frequency_penalty": 0.3}
+        }
+
+        sampling_params = sampling_presets.get(task_type, sampling_presets["factual"])
+
+        if user_preferences:
+            if "creativity_level" in user_preferences:
+                creativity = min(max(user_preferences["creativity_level"], 1), 10) / 10
+                sampling_params["temperature"] = 0.1 + (0.9 * creativity)
+
+            if "diversity" in user_preferences:
+                diversity = min(max(user_preferences["diversity"], 1), 10) / 10
+                sampling_params["top_p"] = 0.6 + (0.39 * diversity)
+
+        response = await self.client.send_request(
+            prompt=prompt,
+            temperature=sampling_params["temperature"],
+            top_p=sampling_params["top_p"],
+            frequency_penalty=sampling_params["frequency_penalty"]
+        )
+
+        return {
+            "text":             response.generated_text,
+            "applied_sampling": sampling_params,
+            "task_type":        task_type
+        }
+```
+
+## Sampling presets reference
+
+| Task type | Temperature | Top-P | Frequency penalty | Best for |
+|-----------|-------------|-------|-------------------|----------|
+| Creative | 0.85–0.9 | 0.94 | 0.7 | Stories, brainstorming, art |
+| Factual | 0.2 | 0.85 | 0.2 | Q&A, summaries, explanations |
+| Code | 0.25–0.3 | 0.90 | 0.4–0.5 | Code generation, debugging |
+| Conversational | 0.7 | 0.90 | 0.6 | Chatbots, support |
+| Analytical | 0.4 | 0.92 | 0.3 | Data analysis, reports |
+
+## Security considerations
+
+<Warning>
+  Never pass user-supplied sampling parameters directly to the model without validation. A malicious user could set extreme values (e.g., `temperature=100`) to degrade model behavior.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Validate all parameters" icon="check">
+    Clamp temperature to [0, 1] and top_p to [0, 1] before sending to the model
+  </Card>
+  <Card title="Implement rate limits" icon="gauge">
+    Prevent abuse by limiting the number of sampling requests per user per minute
+  </Card>
+  <Card title="Monitor usage" icon="chart-line">
+    Track sampling requests for unusual patterns that could indicate misuse
+  </Card>
+  <Card title="Control cost exposure" icon="dollar-sign">
+    Set sensible `maxTokens` limits to prevent unexpectedly large completions
+  </Card>
+</CardGroup>

@@ -1,0 +1,254 @@
+---
+title: C# / .NET Samples
+description: MCP server samples in C# using the ModelContextProtocol SDK — from a basic stdio calculator to an HTTP server deployed on Azure.
+---
+
+The C# samples use the [`ModelContextProtocol`](https://github.com/modelcontextprotocol/csharp-sdk) NuGet package and Microsoft.Extensions.Hosting to create MCP servers with minimal boilerplate.
+
+<Tabs>
+  <Tab title="Basic (stdio)">
+    ## Basic calculator server
+
+    The basic sample (`03-GettingStarted/samples/csharp`) is a stdio MCP server that exposes five calculator tools: `Add`, `Subtract`, `Multiply`, `Divide`, and `IsPrime`.
+
+    <Steps>
+      <Step title="Clone and navigate">
+        ```bash
+        git clone https://github.com/microsoft/mcp-for-beginners.git
+        cd mcp-for-beginners/03-GettingStarted/samples/csharp
+        ```
+      </Step>
+      <Step title="Review dependencies">
+        The project file targets .NET 9 and references two packages:
+
+        ```xml calculator.csproj
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <OutputType>Exe</OutputType>
+            <TargetFramework>net9.0</TargetFramework>
+            <ImplicitUsings>enable</ImplicitUsings>
+            <Nullable>enable</Nullable>
+          </PropertyGroup>
+          <ItemGroup>
+            <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.*" />
+            <PackageReference Include="ModelContextProtocol" Version="0.*-*" />
+          </ItemGroup>
+        </Project>
+        ```
+      </Step>
+      <Step title="Run the server">
+        ```bash
+        dotnet run --project ./src/calculator.csproj
+        ```
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    <CodeGroup>
+      ```csharp Program.cs
+      using Microsoft.Extensions.DependencyInjection;
+      using Microsoft.Extensions.Hosting;
+      using Microsoft.Extensions.Logging;
+
+      var builder = Host.CreateApplicationBuilder(args);
+      builder.Logging.AddConsole(consoleLogOptions =>
+      {
+          // Configure all logs to go to stderr
+          consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+      });
+      builder.Services
+          .AddMcpServer()
+          .WithStdioServerTransport()
+          .WithToolsFromAssembly();
+      await builder.Build().RunAsync();
+      ```
+
+      ```csharp McpCalculatorServer.cs
+      using System.ComponentModel;
+      using ModelContextProtocol.Server;
+
+      namespace Calculator.Tools;
+
+      [McpServerToolType]
+      public static class McpCalculatorServer
+      {
+          [McpServerTool, Description("Calculates the sum of two numbers")]
+          public static double Add(double numberA, double numberB)
+          {
+              return numberA + numberB;
+          }
+
+          [McpServerTool, Description("Calculates the difference of two numbers")]
+          public static double Subtract(double numberA, double numberB)
+          {
+              return numberA - numberB;
+          }
+
+          [McpServerTool, Description("Calculates the product of two numbers")]
+          public static double Multiply(double numberA, double numberB)
+          {
+              return numberA * numberB;
+          }
+
+          [McpServerTool, Description("Calculates the quotient of two numbers")]
+          public static double Divide(double numberA, double numberB)
+          {
+              if (numberB == 0)
+              {
+                  throw new ArgumentException("Cannot divide by zero");
+              }
+              return numberA / numberB;
+          }
+
+          [McpServerTool, Description("Validates if a number is prime")]
+          public static bool IsPrime(long number)
+          {
+              if (number <= 1) return false;
+              if (number <= 3) return true;
+              if (number % 2 == 0 || number % 3 == 0) return false;
+
+              for (long i = 5; i * i <= number; i += 6)
+              {
+                  if (number % i == 0 || number % (i + 2) == 0)
+                      return false;
+              }
+              return true;
+          }
+      }
+      ```
+    </CodeGroup>
+
+    Tools are discovered automatically via `WithToolsFromAssembly()`. Any `static` method decorated with `[McpServerTool]` is registered as an MCP tool — no manual registration needed.
+
+    ### Configure in VS Code
+
+    Create `.vscode/mcp.json` in your workspace root:
+
+    ```jsonc .vscode/mcp.json
+    {
+      "inputs": [
+        {
+          "type": "promptString",
+          "id": "repository-root",
+          "description": "Absolute path to the repository root"
+        }
+      ],
+      "servers": {
+        "calculator-mcp-dotnet": {
+          "type": "stdio",
+          "command": "dotnet",
+          "args": [
+            "run",
+            "--project",
+            "${input:repository-root}/03-GettingStarted/samples/csharp/src/calculator.csproj"
+          ]
+        }
+      }
+    }
+    ```
+
+    ### Run in Docker
+
+    Build and push a container image for the server:
+
+    ```bash
+    # Build
+    docker build -t <YOUR-DOCKER-USERNAME>/mcp-calculator ./src
+
+    # Push
+    docker push <YOUR-DOCKER-USERNAME>/mcp-calculator
+    ```
+
+    Then update `mcp.json` to run from the image:
+
+    ```json .vscode/mcp.json
+    {
+      "servers": {
+        "mcp-calc": {
+          "command": "docker",
+          "args": ["run", "--rm", "-i", "<YOUR-DOCKER-USERNAME>/mcp-calculator"]
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Advanced (HTTP + Azure)">
+    ## Advanced server with Streamable HTTP
+
+    The advanced sample (`04-PracticalImplementation/samples/csharp`) adds HTTP transport via `ModelContextProtocol.AspNetCore`, integrates [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/get-started/aspire-overview) for local observability, and includes an `azd` configuration for one-command Azure deployment.
+
+    <Steps>
+      <Step title="Navigate to the advanced sample">
+        ```bash
+        cd 04-PracticalImplementation/samples/csharp
+        ```
+      </Step>
+      <Step title="Start with .NET Aspire">
+        ```bash
+        dotnet watch run --project ./src/AppHost
+        ```
+
+        The Aspire dashboard opens in your browser. Note the `http://localhost:XXXX/` URL shown for the calculator service.
+      </Step>
+      <Step title="Test with MCP Inspector">
+        In a separate terminal:
+
+        ```bash
+        npx @modelcontextprotocol/inspector http://localhost:5058
+        ```
+
+        Select **Streamable HTTP** as the transport type, set the URL to `http://localhost:5058/mcp`, and click **Connect**.
+      </Step>
+      <Step title="Configure VS Code">
+        ```jsonc .vscode/mcp.json
+        {
+          "servers": {
+            "calc-mcp": {
+              "type": "http",
+              "url": "http://localhost:5058/mcp"
+            }
+          }
+        }
+        ```
+      </Step>
+      <Step title="Deploy to Azure">
+        ```bash
+        azd up
+        ```
+
+        After deployment completes, update `mcp.json` with the Azure URL:
+
+        ```jsonc .vscode/mcp.json
+        {
+          "servers": {
+            "calc-mcp": {
+              "type": "http",
+              "url": "https://<your-app>.azurecontainerapps.io/mcp"
+            }
+          }
+        }
+        ```
+      </Step>
+    </Steps>
+
+    ### Available tools
+
+    | Tool | Description |
+    |------|-------------|
+    | `Add` | Sum of two numbers |
+    | `Subtract` | Difference of two numbers |
+    | `Multiply` | Product of two numbers |
+    | `Divide` | Quotient with divide-by-zero guard |
+    | `IsPrime` | Primality check |
+    | `NextFivePrimeNumbers` | Next five primes after a given number |
+
+    ### Try it with GitHub Copilot Chat
+
+    With the server running and `mcp.json` configured, try these prompts in VS Code Copilot Chat:
+
+    - `"3 prime numbers after 6780"`
+    - `"John has 24 lollies and wants to share them equally with 3 kids. How many each?"`
+  </Tab>
+</Tabs>

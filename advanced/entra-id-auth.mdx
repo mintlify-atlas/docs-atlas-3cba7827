@@ -1,0 +1,255 @@
+---
+title: "Entra ID Authentication"
+description: "Secure MCP servers with Microsoft Entra ID — covering public clients for local servers and confidential clients for remote, internet-facing deployments."
+---
+
+## Overview
+
+Securing your Model Context Protocol (MCP) server is as critical as locking the front door of your house. Microsoft Entra ID provides a robust cloud-based identity and access management solution, ensuring that only authorized users and applications can interact with your MCP server.
+
+## Why security matters for MCP servers
+
+Imagine your MCP server has a tool that can send emails or access a customer database. An unsecured server would mean anyone could potentially use that tool, leading to unauthorized data access, spam, or other malicious activities.
+
+By implementing authentication, every request to your server is verified — confirming the identity of the user or application making the request.
+
+## How Entra ID authentication works
+
+Entra ID uses **OAuth 2.0** for authentication. Think of it like a valet key:
+
+| Analogy | OAuth 2.0 Concept |
+|---------|------------------|
+| You (the car owner) | The User |
+| Your car | The MCP Server |
+| The Valet | Microsoft Entra ID |
+| The Parking Attendant | The MCP Client |
+| The Valet Key | The Access Token |
+
+```
+MCP Client ──► Entra ID: Please sign in
+User signs in with Entra ID credentials
+Entra ID ──► MCP Client: Here is your access token
+MCP Client ──► MCP Server: Here is my access token
+MCP Server ──► Entra ID: Is this token valid?
+Entra ID ──► MCP Server: Yes
+MCP Server ──► MCP Client: Token valid, here is the result
+```
+
+## Scenario 1: Local MCP server (public client)
+
+Use a **public client** for applications running on a user's machine, such as a desktop app or local development server.
+
+### Set up the application in Entra ID
+
+<Steps>
+  <Step title="Register your application">
+    Navigate to the [Microsoft Entra portal](https://entra.microsoft.com/), go to **App registrations**, and click **New registration**.
+  </Step>
+  <Step title="Configure registration">
+    - Give your application a name (e.g., "My Local MCP Server")
+    - For **Supported account types**, select "Accounts in this organizational directory only"
+    - Leave the **Redirect URI** blank for this scenario
+    - Click **Register**
+  </Step>
+  <Step title="Record identifiers">
+    Note the **Application (client) ID** and **Directory (tenant) ID** — you will need these in the code.
+  </Step>
+</Steps>
+
+### AuthenticationService.cs
+
+```csharp
+// Simplified for clarity
+public static async Task<AuthenticationService> CreateAsync(
+    ILogger<AuthenticationService> logger)
+{
+    var msalClient = PublicClientApplicationBuilder
+        .Create(_clientId)         // Your Application (client) ID
+        .WithAuthority(AadAuthorityAudience.AzureAdMyOrg)
+        .WithTenantId(_tenantId)   // Your Directory (tenant) ID
+        .WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.Windows))
+        .Build();
+
+    return new AuthenticationService(logger, msalClient);
+}
+
+public async Task<string> AcquireTokenAsync()
+{
+    try
+    {
+        var accounts = await _msalClient.GetAccountsAsync();
+        var account = accounts.FirstOrDefault();
+
+        AuthenticationResult? result = null;
+
+        if (account != null)
+        {
+            // Try silent authentication first (no user prompt)
+            result = await _msalClient
+                .AcquireTokenSilent(_scopes, account)
+                .ExecuteAsync();
+        }
+        else
+        {
+            // Fall back to interactive sign-in
+            result = await _msalClient
+                .AcquireTokenInteractive(_scopes)
+                .ExecuteAsync();
+        }
+
+        return result.AccessToken;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "An error occurred while acquiring the token.");
+        throw;
+    }
+}
+```
+
+### Using the token in an MCP tool
+
+```csharp
+[McpServerTool(Name = "GetUserDetailsFromGraph")]
+public static async Task<string> GetUserDetailsFromGraph(
+    AuthenticationService authService)
+{
+    try
+    {
+        // Triggers authentication flow if no cached token
+        var accessToken = await authService.AcquireTokenAsync();
+
+        var graphClient = new GraphServiceClient(
+            new BaseBearerTokenAuthenticationProvider(
+                new TokenProvider(authService)));
+
+        var user = await graphClient.Me.GetAsync();
+        return System.Text.Json.JsonSerializer.Serialize(user);
+    }
+    catch (Exception ex)
+    {
+        return $"Error: {ex.Message}";
+    }
+}
+```
+
+## Scenario 2: Remote MCP server (confidential client)
+
+For internet-facing MCP servers, use a **confidential client** and the **Authorization Code Flow** — the application's secrets are never exposed to the browser.
+
+### Set up the confidential client
+
+<Steps>
+  <Step title="Register the application">
+    Navigate to the Microsoft Entra portal and create a new app registration as above.
+  </Step>
+  <Step title="Create a client secret">
+    In your app registration, go to **Certificates & secrets**, click **New client secret**, and copy the value immediately — you cannot retrieve it later.
+  </Step>
+  <Step title="Configure Redirect URI">
+    In the **Authentication** tab, click **Add a platform**, select **Web**, and enter your redirect URI (e.g., `http://localhost:3001/auth/callback`).
+  </Step>
+</Steps>
+
+<Warning>
+  For production, Microsoft strongly recommends **Managed Identity** or **Workload Identity Federation** instead of client secrets. Managed identities eliminate credential storage entirely.
+</Warning>
+
+### Server.ts — protecting SSE endpoints
+
+```typescript
+// Simplified for clarity
+const app = express();
+const { server } = createServer();
+const provider = new EntraIdServerAuthProvider();
+
+// Protect the SSE endpoint
+app.get("/sse", requireBearerAuth({
+    provider,
+    requiredScopes: ["User.Read"]
+}), async (req, res) => {
+    // Connect to the transport
+});
+
+// Protect the message endpoint
+app.post("/message", requireBearerAuth({
+    provider,
+    requiredScopes: ["User.Read"]
+}), async (req, res) => {
+    // Handle the message
+});
+
+// Handle the OAuth 2.0 callback
+app.get("/auth/callback", (req, res) => {
+    provider.handleCallback(req.query.code, req.query.state)
+        .then(result => {
+            // Handle success or failure
+        });
+});
+```
+
+### Tools.ts — using the session token
+
+```typescript
+// Simplified for clarity
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name } = request.params;
+    const context = request.params?.context as { token?: string } | undefined;
+    const sessionToken = context?.token;
+
+    if (name === ToolName.GET_USER_DETAILS) {
+        if (!sessionToken) {
+            throw new AuthenticationError(
+                "Authentication token is missing or invalid.");
+        }
+
+        // Retrieve Entra ID token from the session store
+        const tokenData = tokenStore.getToken(sessionToken);
+        const entraIdToken = tokenData.accessToken;
+
+        const graphClient = Client.init({
+            authProvider: (done) => { done(null, entraIdToken); }
+        });
+
+        const user = await graphClient.api('/me').get();
+        // Return user details
+    }
+});
+```
+
+## Security best practices
+
+<CardGroup cols={2}>
+  <Card title="Always use HTTPS" icon="lock">
+    Encrypt all communication between client and server to protect tokens in transit
+  </Card>
+  <Card title="Implement RBAC" icon="users">
+    Check not just *if* a user is authenticated, but *what* they are authorized to do
+  </Card>
+  <Card title="Monitor and audit" icon="chart-line">
+    Log all authentication events to detect and respond to suspicious activity
+  </Card>
+  <Card title="Handle rate limiting" icon="gauge">
+    Implement exponential backoff for Graph API calls and cache frequently accessed data
+  </Card>
+  <Card title="Secure token storage" icon="database">
+    Use encrypted storage or Azure Key Vault for tokens in server applications
+  </Card>
+  <Card title="Token refresh" icon="arrows-rotate">
+    Implement automatic token refresh to maintain seamless user experience
+  </Card>
+</CardGroup>
+
+## Key takeaways
+
+- Use a **public client** for local applications (desktop, CLI, local dev server)
+- Use a **confidential client** for remote, internet-facing MCP servers
+- The **Authorization Code Flow** is the most secure option for web applications
+- MSAL handles token caching, refresh, and the complexity of OAuth 2.0 for you
+
+## Additional resources
+
+- [MSAL Overview](https://learn.microsoft.com/entra/identity-platform/msal-overview)
+- [mcp-auth-servers GitHub repository](https://github.com/Azure-Samples/mcp-auth-servers)
+- [Managed Identities for Azure Resources](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/)
+- [Azure API Management as Auth Gateway for MCP Servers](https://techcommunity.microsoft.com/blog/integrationsonazureblog/azure-api-management-your-auth-gateway-for-mcp-servers/4402690)

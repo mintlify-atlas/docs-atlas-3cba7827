@@ -1,0 +1,270 @@
+---
+title: TypeScript Samples
+description: MCP server samples in TypeScript using the official MCP SDK — from a type-safe calculator with stdio transport to a class-based server with ResourceTemplate and event emitters.
+---
+
+The TypeScript samples use the [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) package with Zod for schema validation and TypeScript for end-to-end type safety.
+
+<Tabs>
+  <Tab title="Basic (stdio)">
+    ## Basic calculator server
+
+    Located at `03-GettingStarted/samples/typescript`, this is a strongly-typed MCP server with four arithmetic tools.
+
+    <Steps>
+      <Step title="Clone and navigate">
+        ```bash
+        git clone https://github.com/microsoft/mcp-for-beginners.git
+        cd mcp-for-beginners/03-GettingStarted/samples/typescript
+        ```
+      </Step>
+      <Step title="Install dependencies">
+        ```bash
+        npm install
+        ```
+      </Step>
+      <Step title="Build and run">
+        ```bash
+        npm start
+        ```
+
+        This runs `tsc` then `node ./build/index.js`.
+      </Step>
+    </Steps>
+
+    ### package.json
+
+    ```json package.json
+    {
+      "name": "tutorial-mcp",
+      "version": "1.0.0",
+      "type": "module",
+      "scripts": {
+        "start": "tsc && node ./build/index.js"
+      },
+      "dependencies": {
+        "@modelcontextprotocol/sdk": ">=1.26.0",
+        "zod": "^3.24.2"
+      },
+      "devDependencies": {
+        "@types/node": "^22.13.17",
+        "typescript": "^5.8.2"
+      }
+    }
+    ```
+
+    ### Server code
+
+    ```typescript src/index.ts
+    import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+    import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+    import { z } from "zod";
+
+    const server = new McpServer({
+      name: "Calculator MCP Server",
+      version: "1.0.0"
+    });
+
+    server.tool(
+      "add",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a + b) }]
+      })
+    );
+
+    server.tool(
+      "subtract",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a - b) }]
+      })
+    );
+
+    server.tool(
+      "multiply",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a * b) }]
+      })
+    );
+
+    server.tool(
+      "divide",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => {
+        if (b === 0) {
+          return {
+            content: [{ type: "text", text: "Error: Cannot divide by zero" }],
+            isError: true
+          };
+        }
+        return {
+          content: [{ type: "text", text: String(a / b) }]
+        };
+      }
+    );
+
+    const transport = new StdioServerTransport();
+    server.connect(transport).catch(console.error);
+
+    console.log("Calculator MCP Server started");
+    ```
+
+    The Zod schemas are inferred at compile time — TypeScript ensures the handler receives the exact types declared in the schema.
+  </Tab>
+
+  <Tab title="Advanced">
+    ## Advanced server with ResourceTemplate and event system
+
+    Located at `04-PracticalImplementation/samples/typescript`, this sample organises the server as a typed class with private methods for registration, a `completion` tool, and a dynamic `search` resource using `ResourceTemplate`.
+
+    <Steps>
+      <Step title="Navigate to the advanced sample">
+        ```bash
+        cd 04-PracticalImplementation/samples/typescript
+        ```
+      </Step>
+      <Step title="Install and build">
+        ```bash
+        npm install
+        npm start
+        ```
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    <CodeGroup>
+      ```typescript Class definition
+      import { EventEmitter } from 'events';
+      import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+      import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+      import { z } from 'zod';
+
+      export class ExtendedMcpServer {
+        private serverName: string;
+        private models: string[];
+        private events: EventEmitter;
+        private mcpServer: McpServer;
+
+        constructor(options: {
+          serverName?: string;
+          version?: string;
+          models?: string[];
+        } = {}) {
+          this.serverName = options.serverName || 'TypeScript MCP Server';
+          this.models = options.models || ['gpt-4', 'llama-3-70b', 'claude-3-sonnet'];
+          this.events = new EventEmitter();
+          this.mcpServer = new McpServer({
+            name: this.serverName,
+            version: options.version || '1.0.0'
+          });
+          this.registerCompletionTool();
+          this.registerSearchResource();
+        }
+
+        public async connect(): Promise<void> {
+          const transport = new StdioServerTransport();
+          await this.mcpServer.connect(transport);
+        }
+
+        public on(event: string, listener: (...args: any[]) => void): void {
+          this.events.on(event, listener);
+        }
+      }
+      ```
+
+      ```typescript Completion tool
+      private registerCompletionTool(): void {
+        this.mcpServer.tool(
+          'completion',
+          {
+            model: z.string(),
+            prompt: z.string(),
+            options: z.object({
+              temperature: z.number().optional(),
+              max_tokens: z.number().optional(),
+              stream: z.boolean().optional()
+            }).optional()
+          },
+          async ({ model, prompt }) => {
+            if (!this.models.includes(model)) {
+              throw new Error(`Model ${model} not supported`);
+            }
+
+            this.events.emit('request', { type: 'completion', model, timestamp: new Date() });
+
+            const response = {
+              id: `mcp-resp-${Date.now()}`,
+              model,
+              text: `This is a response to: ${prompt.substring(0, 30)}...`,
+              usage: {
+                promptTokens: prompt.split(' ').length,
+                completionTokens: 20,
+                totalTokens: prompt.split(' ').length + 20
+              }
+            };
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+            this.events.emit('completion', { model, timestamp: new Date() });
+
+            return { content: [{ type: 'text', text: JSON.stringify(response) }] };
+          }
+        );
+      }
+      ```
+
+      ```typescript Search resource
+      private registerSearchResource(): void {
+        this.mcpServer.resource(
+          'search',
+          new ResourceTemplate('test://{query}', { list: undefined }),
+          async (uri, { query }) => {
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const results = [
+              { title: 'Result 1', snippet: `Related to ${query}...` },
+              { title: 'Result 2', snippet: `Information about ${query}...` },
+              { title: 'Result 3', snippet: `More details on ${query}...` }
+            ];
+
+            return {
+              contents: [{ uri: uri.href, text: JSON.stringify(results) }]
+            };
+          }
+        );
+      }
+      ```
+
+      ```typescript Entry point
+      const server = new ExtendedMcpServer({
+        serverName: 'TypeScript MCP Demo Server',
+        version: '1.0.0'
+      });
+
+      server.on('request', (data) => {
+        console.log(`Request: ${JSON.stringify(data)}`);
+      });
+
+      server.on('completion', (data) => {
+        console.log(`Completion: ${JSON.stringify(data)}`);
+      });
+
+      server.connect().catch(error => {
+        console.error('Failed to connect:', error);
+        process.exit(1);
+      });
+      ```
+    </CodeGroup>
+
+    ### Key TypeScript patterns
+
+    | Pattern | Detail |
+    |---------|--------|
+    | Private registration methods | `registerCompletionTool()` and `registerSearchResource()` keep the constructor clean |
+    | `ResourceTemplate` | Declares a URI template (`test://{query}`) with typed parameters |
+    | `EventEmitter` | Typed events for request/completion metrics |
+    | Strict typing | `models: string[]`, `options: { temperature?: number }` — all inferred by the compiler |
+  </Tab>
+</Tabs>

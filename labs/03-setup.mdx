@@ -1,0 +1,410 @@
+---
+title: "Lab 3: Environment Setup"
+description: "Install all required tools, deploy Azure resources, start the Docker development environment, and validate every component is working before building the server."
+---
+
+## Objectives
+
+By the end of this lab you will be able to:
+
+- Install and configure all required development tools
+- Deploy Azure resources needed for the MCP server
+- Set up Docker containers for PostgreSQL and the MCP server
+- Validate your environment setup with test connections
+- Troubleshoot common setup issues and configuration problems
+
+## Prerequisites
+
+- Completed [Lab 2: Security & Multi-Tenancy](/labs/02-security)
+- Basic command-line usage
+- An Azure subscription (free tier is sufficient)
+- A GitHub account
+
+## System requirements
+
+| Requirement | Minimum |
+|-------------|---------|
+| Operating System | Windows 10/11, macOS, or Linux |
+| RAM | 8 GB (16 GB recommended) |
+| Storage | 10 GB free |
+| Network | Internet connection for downloads and Azure |
+
+## Step 1: Install Docker Desktop
+
+<Steps>
+  <Step title="Install Docker">
+    <CodeGroup>
+    ```bash macOS
+    brew install --cask docker
+    ```
+    ```bash Linux (Ubuntu/Debian)
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    # Log out and back in for group changes to take effect
+    ```
+    ```cmd Windows
+    winget install Docker.DockerDesktop
+    ```
+    </CodeGroup>
+  </Step>
+  <Step title="Verify installation">
+    ```bash
+    docker --version
+    docker-compose --version
+    ```
+  </Step>
+</Steps>
+
+## Step 2: Install Azure CLI
+
+<Steps>
+  <Step title="Install">
+    <CodeGroup>
+    ```bash macOS
+    brew install azure-cli
+    ```
+    ```bash Linux (Ubuntu/Debian)
+    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+    ```
+    ```cmd Windows
+    winget install Microsoft.AzureCLI
+    ```
+    </CodeGroup>
+  </Step>
+  <Step title="Authenticate">
+    ```bash
+    az version
+    az login
+    az account list --output table
+    az account set --subscription "Your-Subscription-Name"
+    ```
+  </Step>
+</Steps>
+
+## Step 3: Install Python 3.11
+
+<CodeGroup>
+```bash macOS
+brew install python@3.11
+```
+```bash Linux (Ubuntu/Debian)
+sudo apt update && sudo apt install python3.11 python3.11-pip python3.11-venv
+```
+```cmd Windows
+winget install Python.Python.3.11
+```
+</CodeGroup>
+
+Verify:
+
+```bash
+python --version   # Should show Python 3.11.x
+pip --version
+```
+
+## Step 4: Install VS Code and extensions
+
+```bash
+# Install VS Code
+# macOS
+brew install --cask visual-studio-code
+# Windows
+winget install Microsoft.VisualStudioCode
+
+# Install required extensions
+code --install-extension ms-python.python
+code --install-extension ms-vscode.vscode-json
+code --install-extension ms-azuretools.vscode-docker
+code --install-extension ms-vscode.azure-account
+```
+
+## Step 5: Clone the repository
+
+```bash
+git clone https://github.com/microsoft/MCP-Server-and-PostgreSQL-Sample-Retail.git
+cd MCP-Server-and-PostgreSQL-Sample-Retail
+```
+
+## Step 6: Create Python virtual environment
+
+```bash
+python -m venv mcp-env
+
+# Activate — macOS/Linux
+source mcp-env/bin/activate
+
+# Activate — Windows
+mcp-env\Scripts\activate
+
+python -m pip install --upgrade pip
+pip install -r requirements.lock.txt
+```
+
+Verify key packages are installed:
+
+```bash
+pip list | grep fastmcp
+pip list | grep asyncpg
+pip list | grep azure
+```
+
+## Step 7: Deploy Azure resources
+
+### Option A: Automated deployment (recommended)
+
+<Steps>
+  <Step title="Run the deployment script">
+    <CodeGroup>
+    ```bash macOS/Linux
+    cd infra
+    ./deploy.sh
+    ```
+    ```powershell Windows
+    cd infra
+    ./deploy.ps1
+    ```
+    </CodeGroup>
+
+    The script will:
+    1. Create a unique resource group
+    2. Deploy Azure AI Foundry resources
+    3. Deploy the `text-embedding-3-small` model
+    4. Configure Application Insights
+    5. Create a service principal
+    6. Generate a `.env` file with all configuration values
+  </Step>
+  <Step title="Verify the deployment">
+    ```bash
+    az group show --name $RESOURCE_GROUP --output table
+    az resource list --resource-group $RESOURCE_GROUP --output table
+    ```
+  </Step>
+</Steps>
+
+### Option B: Manual deployment
+
+```bash
+RESOURCE_GROUP="rg-zava-mcp-$(date +%s)"
+LOCATION="westus2"
+
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+az deployment group create \
+  --resource-group $RESOURCE_GROUP \
+  --template-file main.bicep \
+  --parameters location=$LOCATION \
+  --parameters resourcePrefix="zava-mcp"
+```
+
+### Required Azure resources and estimated cost
+
+| Resource | Purpose | Estimated cost |
+|----------|---------|---------------|
+| Azure AI Foundry | AI model hosting | $10–50/month |
+| OpenAI Deployment | `text-embedding-3-small` | $5–20/month |
+| Application Insights | Monitoring | $5–15/month |
+| Resource Group | Organization | Free |
+
+## Step 8: Configure environment variables
+
+After deployment, confirm your `.env` file contains:
+
+```bash
+# Azure AI / OpenAI
+PROJECT_ENDPOINT=https://your-project.cognitiveservices.azure.com/
+AZURE_OPENAI_ENDPOINT=https://your-openai.openai.azure.com/
+EMBEDDING_MODEL_DEPLOYMENT_NAME=text-embedding-3-small
+AZURE_CLIENT_ID=your-client-id
+AZURE_CLIENT_SECRET=your-client-secret
+AZURE_TENANT_ID=your-tenant-id
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=your-key;...
+
+# Database (development)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=zava
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-secure-password
+```
+
+<Warning>
+  Never commit your `.env` file to version control. The repository's `.gitignore` should already exclude it.
+</Warning>
+
+## Step 9: Start the Docker environment
+
+The `docker-compose.yml` launches PostgreSQL with pgvector and the MCP server:
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: zava
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/backup_data:ro
+      - ./docker-init:/docker-entrypoint-initdb.d:ro
+
+  mcp_server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+```
+
+```bash
+docker-compose up -d
+docker-compose ps
+docker-compose logs -f
+```
+
+## Step 10: Configure VS Code MCP integration
+
+Create `.vscode/mcp.json`:
+
+```json
+{
+    "servers": {
+        "zava-sales-analysis-headoffice": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "00000000-0000-0000-0000-000000000000"}
+        },
+        "zava-sales-analysis-seattle": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}
+        },
+        "zava-sales-analysis-redmond": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234"}
+        }
+    },
+    "inputs": []
+}
+```
+
+Create `.vscode/settings.json`:
+
+```json
+{
+    "python.defaultInterpreterPath": "./mcp-env/bin/python",
+    "python.linting.enabled": true,
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["tests"]
+}
+```
+
+## Validate your setup
+
+### Automated validation script
+
+```bash
+# Verify database connectivity
+docker-compose exec postgres psql -U postgres -d zava -c "\dt retail.*"
+docker-compose exec postgres psql -U postgres -d zava -c "SELECT COUNT(*) FROM retail.stores;"
+
+# Test the MCP server health endpoint
+curl http://localhost:8000/health
+
+# Test MCP protocol
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-rls-user-id: 00000000-0000-0000-0000-000000000000" \
+  -d '{"method": "tools/list", "params": {}}'
+```
+
+### Manual validation checklist
+
+**Basic tools:**
+- Docker 20.10+ installed and running
+- Azure CLI 2.40+ installed and authenticated
+- Python 3.8+ with pip installed
+- Git 2.30+ installed
+- VS Code with required extensions
+
+**Azure resources:**
+- Resource group created successfully
+- AI Foundry project deployed
+- `text-embedding-3-small` model deployed
+- Application Insights configured
+- Service principal created with proper permissions
+
+**Environment:**
+- `.env` file created with all required variables
+- PostgreSQL container running and accessible
+- Sample data loaded in database
+
+**VS Code integration:**
+- `.vscode/mcp.json` configured
+- Python interpreter set to virtual environment
+- MCP servers appear in AI Chat
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Docker containers won't start">
+    ```bash
+    docker info
+    docker system df
+    docker system prune -f
+    # Linux: restart the Docker daemon
+    sudo systemctl restart docker
+    ```
+  </Accordion>
+  <Accordion title="PostgreSQL connection fails">
+    ```bash
+    docker-compose logs postgres
+    docker-compose ps
+    docker-compose exec postgres psql -U postgres -d zava -c "SELECT 1;"
+    ```
+  </Accordion>
+  <Accordion title="Azure deployment fails">
+    ```bash
+    az account show
+    az role assignment list --assignee $(az account show --query user.name -o tsv)
+    az provider register --namespace Microsoft.CognitiveServices
+    az provider register --namespace Microsoft.Insights
+    ```
+  </Accordion>
+  <Accordion title="Python package installation fails">
+    ```bash
+    python -m pip install --upgrade pip setuptools wheel
+    pip cache purge
+    pip install fastmcp
+    pip install asyncpg
+    pip install azure-ai-projects
+    ```
+  </Accordion>
+  <Accordion title="VS Code can't find Python interpreter">
+    ```bash
+    # Activate the virtual environment first, then open VS Code
+    source mcp-env/bin/activate   # macOS/Linux
+    mcp-env\Scripts\activate      # Windows
+    code .
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Key takeaways
+
+- All tools installed and configured for development
+- Azure AI and monitoring resources deployed
+- Docker environment running PostgreSQL with pgvector
+- VS Code configured with MCP server connections
+- All components validated and tested together
+
+<Card title="Next: Lab 4 — Database Design" icon="arrow-right" href="/labs/04-database">
+  Explore the retail database schema in detail, understand multi-tenant data modeling, and work with sample data.
+</Card>

@@ -1,0 +1,334 @@
+---
+title: "Real-Time Web Search"
+description: "Build MCP-powered real-time web search solutions that preserve search context across queries, federate multiple search providers, and deliver fresh, relevant results."
+---
+
+## Overview
+
+Real-time web search with MCP provides a standardized approach to context management across AI models, search engines, and applications. Unlike traditional search systems operating on stale indexes, MCP-powered search preserves query context and user intent across multi-turn search sessions.
+
+<CardGroup cols={2}>
+  <Card title="Context preservation" icon="bookmark">
+    Maintain query history, user preferences, and interaction context across sessions
+  </Card>
+  <Card title="Federated search" icon="network-wired">
+    Aggregate results from multiple search providers with unified context
+  </Card>
+  <Card title="Semantic understanding" icon="brain">
+    Process queries and content based on meaning rather than just keywords
+  </Card>
+  <Card title="Real-time ranking" icon="arrow-up">
+    Continuously adjust result rankings as new information becomes available
+  </Card>
+</CardGroup>
+
+## MCP search architecture
+
+```
+Data Sources (Web, APIs, Knowledge Bases, News)
+          │
+          ▼
+Search Connectors ──► Protocol Adapters ──► Context Handlers
+                                                   │
+                                            Context Store
+                                                   │
+                                          Search Processors
+                                    │              │              │
+                              Relevance Engine   ML Models   NLP Processing
+                                    │
+                               Ranking System
+                                    │
+                           Research Assistant / API
+```
+
+## Search context components
+
+When implementing MCP-based web search, context typically includes:
+
+| Context element | Description |
+|-----------------|-------------|
+| Query history | Previous search queries in the session |
+| User preferences | Language, region, safe search settings |
+| Interaction history | Clicked results, dwell time |
+| Search parameters | Filters, sort orders, date ranges |
+| Domain knowledge | Subject-specific context relevant to the search |
+| Source preferences | Trusted or preferred information sources |
+
+## Python implementation
+
+```python
+import asyncio
+import json
+import aiohttp
+from typing import Dict, Any, Optional, List
+from contextlib import asynccontextmanager
+from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+from mcp.server.fastmcp import FastMCP
+
+search_server = FastMCP("WebSearch")
+
+class WebSearchHandler:
+    def __init__(self, api_endpoint: str, api_key: str):
+        self.api_endpoint = api_endpoint
+        self.api_key      = api_key
+        self.session      = None
+
+    async def initialize(self):
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"}
+        )
+
+    async def close(self):
+        if self.session:
+            await self.session.close()
+
+    async def perform_search(
+        self,
+        query: str,
+        max_results: int = 5,
+        include_domains: List[str] = None,
+        exclude_domains: List[str] = None,
+        time_period: str = "any"
+    ) -> Dict[str, Any]:
+        search_params = {"q": query, "limit": max_results, "time": time_period}
+
+        if include_domains:
+            search_params["site"] = ",".join(include_domains)
+        if exclude_domains:
+            search_params["exclude_site"] = ",".join(exclude_domains)
+
+        async with self.session.get(
+            self.api_endpoint,
+            params=search_params
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                raise Exception(f"Search API error: {response.status} — {error_text}")
+
+            search_data = await response.json()
+
+            results = []
+            for item in search_data.get("results", []):
+                results.append({
+                    "title":   item.get("title", ""),
+                    "url":     item.get("url", ""),
+                    "snippet": item.get("snippet", ""),
+                    "date":    item.get("published_date", ""),
+                    "source":  item.get("source", "")
+                })
+
+            return {"query": query, "totalResults": len(results), "results": results}
+
+
+search_handler = WebSearchHandler(
+    api_endpoint="https://api.search-service.example/search",
+    api_key="your-api-key-here"
+)
+
+@asyncio.asynccontextmanager
+async def app_lifespan(server: FastMCP):
+    await search_handler.initialize()
+    try:
+        yield {"search_handler": search_handler}
+    finally:
+        await search_handler.close()
+
+search_server = FastMCP("WebSearch", lifespan=app_lifespan)
+
+@search_server.tool()
+async def web_search(
+    query: str,
+    max_results: int = 5,
+    include_domains: List[str] = None,
+    exclude_domains: List[str] = None,
+    time_period: str = "any"
+) -> Dict[str, Any]:
+    """
+    Search the web for information.
+
+    Args:
+        query:           The search query
+        max_results:     Maximum number of results (default: 5)
+        include_domains: Domains to include in results
+        exclude_domains: Domains to exclude from results
+        time_period:     Time filter — "day", "week", "month", or "any"
+
+    Returns:
+        Dictionary containing search results
+    """
+    ctx = search_server.get_context()
+    handler = ctx.request_context.lifespan_context["search_handler"]
+
+    return await handler.perform_search(
+        query           = query,
+        max_results     = max_results,
+        include_domains = include_domains,
+        exclude_domains = exclude_domains,
+        time_period     = time_period
+    )
+
+
+# Client usage example
+async def client_example():
+    async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            search_results = await session.call_tool(
+                "web_search",
+                {
+                    "query":          "latest developments in AI and Model Context Protocol",
+                    "max_results":    5,
+                    "time_period":    "day",
+                    "include_domains": ["github.com", "microsoft.com"]
+                }
+            )
+            print(f"Search results: {search_results}")
+
+if __name__ == "__main__":
+    search_server.run(transport="streamable-http")
+```
+
+## JavaScript implementation
+
+```javascript
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { z } from 'zod';
+
+const searchServer = new McpServer({
+    name: "BrowserSearch",
+    description: "A server that provides web search capabilities"
+});
+
+class SearchService {
+    constructor(searchApiUrl, apiKey) {
+        this.searchApiUrl = searchApiUrl;
+        this.apiKey       = apiKey;
+    }
+
+    async performSearch(parameters) {
+        const {
+            query          = '',
+            maxResults     = 5,
+            includeDomains = [],
+            excludeDomains = [],
+            timePeriod     = 'any'
+        } = parameters;
+
+        const url = new URL(this.searchApiUrl);
+        url.searchParams.append('q',     query);
+        url.searchParams.append('limit', maxResults);
+        url.searchParams.append('time',  timePeriod);
+
+        if (includeDomains.length > 0)
+            url.searchParams.append('site', includeDomains.join(','));
+        if (excludeDomains.length > 0)
+            url.searchParams.append('exclude_site', excludeDomains.join(','));
+
+        const response = await fetch(url.toString(), {
+            method:  'GET',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type':  'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Search API error: ${response.status}`);
+        }
+
+        const searchData = await response.json();
+        const results = searchData.results?.map(item => ({
+            title:   item.title   || '',
+            url:     item.url     || '',
+            snippet: item.snippet || '',
+            date:    item.published_date || '',
+            source:  item.source  || ''
+        })) || [];
+
+        return { query, totalResults: results.length, results };
+    }
+}
+
+const searchService = new SearchService(
+    'https://api.search-service.example/search',
+    'your-api-key-here'
+);
+
+searchServer.tool({
+    name:        'web_search',
+    description: 'Search the web for information',
+    parameters: {
+        type: 'object',
+        properties: {
+            query:          { type: 'string', description: 'The search query' },
+            maxResults:     { type: 'integer', default: 5 },
+            includeDomains: { type: 'array', items: { type: 'string' } },
+            excludeDomains: { type: 'array', items: { type: 'string' } },
+            timePeriod: {
+                type: 'string',
+                enum: ['day', 'week', 'month', 'any'],
+                default: 'any'
+            }
+        },
+        required: ['query']
+    },
+    handler: async (params, context) => searchService.performSearch(params)
+});
+```
+
+## Search integration patterns
+
+### 1. Direct provider integration
+
+```
+MCP Client ──► MCP Server ──► Search API ──► Results ──► Client
+```
+
+The MCP server translates MCP requests into API-specific calls and formats results as MCP responses.
+
+### 2. Federated search with context preservation
+
+```
+MCP Client ──► Federation Layer ──► Provider 1
+                                ──► Provider 2
+                                ──► Provider 3
+              ◄── Aggregated Response
+```
+
+Queries are dispatched across multiple MCP-compatible search providers, with results merged and deduplicated.
+
+### 3. Context-enhanced search chain
+
+```
+Query + Context ──► NLP Analysis ──► Enhanced Query
+                                         │
+                                   Search Execution
+                                         │
+                                   Result Enrichment
+                                         │
+                              Final Results + Updated Context
+```
+
+## Trust and safety
+
+<Warning>
+  Search tools interact with external web resources. Always implement authorization and validation — tool descriptions should be treated as untrusted unless obtained from a trusted server.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="User consent" icon="user-check">
+    Users must explicitly consent to and understand all data access operations
+  </Card>
+  <Card title="Data privacy" icon="shield">
+    Handle search queries containing sensitive information with appropriate access controls
+  </Card>
+  <Card title="Rate limiting" icon="gauge">
+    Implement per-user request limits and respect search API rate limits
+  </Card>
+  <Card title="Result validation" icon="check">
+    Validate and sanitize search results before returning them to AI models
+  </Card>
+</CardGroup>

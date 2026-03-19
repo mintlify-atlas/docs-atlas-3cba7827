@@ -1,0 +1,180 @@
+---
+title: "OAuth2 Authentication"
+description: "Implement OAuth2 authentication for MCP servers using Spring Boot — including token issuance, protected endpoints, and Azure Container Apps deployment."
+---
+
+## Overview
+
+OAuth2 is the industry-standard protocol for authorization, enabling secure access to resources without sharing credentials. In MCP implementations, OAuth2 provides a robust way to authenticate and authorize clients (such as AI agents) accessing MCP servers and their tools.
+
+This lesson demonstrates how to implement OAuth2 using Spring Boot, acting as both an Authorization Server and a Resource Server.
+
+## Project overview
+
+This project is a **minimal Spring Boot application** that:
+
+- Acts as a **Spring Authorization Server** — issuing JWT access tokens via the `client_credentials` flow
+- Acts as a **Resource Server** — protecting its own `/hello` endpoint
+
+<CardGroup cols={2}>
+  <Card title="Client credentials flow" icon="key">
+    Machine-to-machine OAuth2 — no user login required
+  </Card>
+  <Card title="JWT tokens" icon="shield">
+    Stateless, verifiable access tokens with configurable scopes
+  </Card>
+  <Card title="Azure Container Apps" icon="cloud">
+    Production-ready deployment with automatic TLS
+  </Card>
+  <Card title="APIM integration" icon="network-wired">
+    Validate JWTs at the API gateway layer
+  </Card>
+</CardGroup>
+
+## Quick start (local)
+
+<Steps>
+  <Step title="Build and run the server">
+    ```bash
+    ./mvnw spring-boot:run
+    ```
+  </Step>
+  <Step title="Obtain an access token">
+    ```bash
+    curl -u mcp-client:secret \
+      -d grant_type=client_credentials \
+      http://localhost:8081/oauth2/token | jq -r .access_token > token.txt
+    ```
+  </Step>
+  <Step title="Call the protected endpoint">
+    ```bash
+    curl -H "Authorization: Bearer $(cat token.txt)" http://localhost:8081/hello
+    ```
+
+    A successful response returns: `Hello from MCP OAuth2 Demo!`
+  </Step>
+</Steps>
+
+## Testing the OAuth2 configuration
+
+### 1. Verify the server is running and secured
+
+```bash
+# This should return 401 Unauthorized
+curl -v http://localhost:8081/
+```
+
+### 2. Get an access token using client credentials
+
+```bash
+# Full token response
+curl -v -X POST http://localhost:8081/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Authorization: Basic bWNwLWNsaWVudDpzZWNyZXQ=" \
+  -d "grant_type=client_credentials&scope=mcp.access"
+
+# Extract just the token (requires jq)
+curl -s -X POST http://localhost:8081/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Authorization: Basic bWNwLWNsaWVudDpzZWNyZXQ=" \
+  -d "grant_type=client_credentials&scope=mcp.access" \
+  | jq -r .access_token > token.txt
+```
+
+<Note>
+  The Basic Authentication header `bWNwLWNsaWVudDpzZWNyZXQ=` is the Base64 encoding of `mcp-client:secret`.
+</Note>
+
+### 3. Access the protected endpoint
+
+```bash
+# Using the saved token
+curl -H "Authorization: Bearer $(cat token.txt)" http://localhost:8081/hello
+
+# Or inline with the token value
+curl -H "Authorization: Bearer eyJra...token_value...xyz" http://localhost:8081/hello
+```
+
+## Container deployment
+
+```bash
+docker build -t mcp-oauth2-demo .
+docker run -p 8081:8081 mcp-oauth2-demo
+```
+
+## Deploy to Azure Container Apps
+
+```bash
+az containerapp up -n mcp-oauth2 \
+  -g demo-rg -l westeurope \
+  --image <your-registry>/mcp-oauth2-demo:latest \
+  --ingress external --target-port 8081
+```
+
+The ingress FQDN becomes your **issuer** (`https://<fqdn>`). Azure provides a trusted TLS certificate automatically for `*.azurecontainerapps.io`.
+
+## Wire into Azure API Management
+
+Add this inbound policy to your API to validate JWTs at the gateway:
+
+```xml
+<inbound>
+  <validate-jwt header-name="Authorization">
+    <openid-config url="https://<fqdn>/.well-known/openid-configuration"/>
+    <audiences>
+      <audience>mcp-client</audience>
+    </audiences>
+  </validate-jwt>
+  <base/>
+</inbound>
+```
+
+<Tip>
+  APIM fetches the JWKS automatically from the OpenID configuration URL and validates every inbound request — no code changes required on the MCP server.
+</Tip>
+
+## How the flow works
+
+```
+MCP Client
+  │
+  ├── POST /oauth2/token (client_credentials)
+  │     Authorization: Basic mcp-client:secret
+  │
+  ▼
+Spring Authorization Server
+  │
+  ├── Issues JWT access token (signed, scoped to mcp.access)
+  │
+  ▼
+MCP Client
+  │
+  ├── GET /hello
+  │     Authorization: Bearer <jwt>
+  │
+  ▼
+Spring Resource Server
+  │
+  └── Validates JWT → returns response
+```
+
+## Security considerations
+
+<Warning>
+  Never commit client secrets to source control. Use environment variables or Azure Key Vault for storing the `secret` value in production.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS everywhere" icon="lock">
+    Always use HTTPS in production to protect tokens in transit
+  </Card>
+  <Card title="Short token lifetimes" icon="clock">
+    Configure short-lived access tokens and use refresh tokens appropriately
+  </Card>
+  <Card title="Scope validation" icon="check">
+    Validate the `scope` claim in the JWT on every resource server request
+  </Card>
+  <Card title="Rotate secrets" icon="arrows-rotate">
+    Regularly rotate client secrets and use managed identities where possible
+  </Card>
+</CardGroup>

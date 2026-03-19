@@ -1,0 +1,255 @@
+---
+title: "Azure Integration"
+description: "Integrate MCP servers with Azure OpenAI, Microsoft AI Foundry, and Azure Machine Learning for enterprise-grade AI capabilities."
+---
+
+## Overview
+
+When building MCP servers in an enterprise context, you often need to integrate with existing AI platforms and services. This lesson covers how to integrate MCP with Azure OpenAI, Microsoft AI Foundry, and Azure Machine Learning — enabling advanced AI capabilities and tool orchestration.
+
+<CardGroup cols={3}>
+  <Card title="Azure OpenAI" icon="robot">
+    Leverage GPT-4 and other models with MCP tool orchestration
+  </Card>
+  <Card title="AI Foundry" icon="building">
+    Connect MCP to Microsoft's enterprise agent platform
+  </Card>
+  <Card title="Azure ML" icon="chart-bar">
+    Execute ML pipelines and register models as MCP tools
+  </Card>
+</CardGroup>
+
+## Azure OpenAI Integration
+
+Azure OpenAI provides access to powerful AI models like GPT-4. Integrating MCP with Azure OpenAI lets you utilize these models while maintaining the flexibility of MCP's tool orchestration.
+
+### C# Implementation
+
+```csharp
+// .NET Azure OpenAI Integration
+using Microsoft.Mcp.Client;
+using Azure.AI.OpenAI;
+using Microsoft.Extensions.Configuration;
+using System.Threading.Tasks;
+
+namespace EnterpriseIntegration
+{
+    public class AzureOpenAiMcpClient
+    {
+        private readonly string _endpoint;
+        private readonly string _apiKey;
+        private readonly string _deploymentName;
+
+        public AzureOpenAiMcpClient(IConfiguration config)
+        {
+            _endpoint = config["AzureOpenAI:Endpoint"];
+            _apiKey = config["AzureOpenAI:ApiKey"];
+            _deploymentName = config["AzureOpenAI:DeploymentName"];
+        }
+
+        public async Task<string> GetCompletionWithToolsAsync(
+            string prompt,
+            params string[] allowedTools)
+        {
+            var client = new OpenAIClient(
+                new Uri(_endpoint),
+                new AzureKeyCredential(_apiKey));
+
+            var completionOptions = new ChatCompletionsOptions
+            {
+                DeploymentName = _deploymentName,
+                Messages = { new ChatMessage(ChatRole.User, prompt) },
+                Temperature = 0.7f,
+                MaxTokens = 800
+            };
+
+            foreach (var tool in allowedTools)
+            {
+                completionOptions.Tools.Add(new ChatCompletionsFunctionToolDefinition
+                {
+                    Name = tool,
+                });
+            }
+
+            var response = await client.GetChatCompletionsAsync(completionOptions);
+
+            // Handle tool calls in the response
+            foreach (var toolCall in response.Value.Choices[0].Message.ToolCalls)
+            {
+                // Route tool call to MCP server
+            }
+
+            return response.Value.Choices[0].Message.Content;
+        }
+    }
+}
+```
+
+## Microsoft AI Foundry Integration
+
+Azure AI Foundry provides a platform for building and deploying AI agents. This integration routes AI Foundry agent tool calls through MCP.
+
+### Java Implementation
+
+```java
+// Java AI Foundry Agent Integration
+package com.example.mcp.enterprise;
+
+import com.microsoft.aifoundry.AgentClient;
+import com.microsoft.aifoundry.AgentToolResponse;
+import com.microsoft.aifoundry.models.AgentRequest;
+import com.microsoft.aifoundry.models.AgentResponse;
+import com.mcp.client.McpClient;
+import com.mcp.tools.ToolRequest;
+import com.mcp.tools.ToolResponse;
+
+public class AIFoundryMcpBridge {
+    private final AgentClient agentClient;
+    private final McpClient mcpClient;
+
+    public AIFoundryMcpBridge(String aiFoundryEndpoint, String mcpServerUrl) {
+        this.agentClient = new AgentClient(aiFoundryEndpoint);
+        this.mcpClient = new McpClient.Builder()
+            .setServerUrl(mcpServerUrl)
+            .build();
+    }
+
+    public AgentResponse processAgentRequest(AgentRequest request) {
+        AgentResponse initialResponse = agentClient.processRequest(request);
+
+        if (initialResponse.getToolCalls() != null
+                && !initialResponse.getToolCalls().isEmpty()) {
+            for (AgentToolCall toolCall : initialResponse.getToolCalls()) {
+                String toolName = toolCall.getName();
+                Map<String, Object> parameters = toolCall.getArguments();
+
+                // Execute the tool using MCP
+                ToolResponse mcpResponse = mcpClient.executeTool(toolName, parameters);
+
+                AgentToolResponse toolResponse = new AgentToolResponse(
+                    toolCall.getId(),
+                    mcpResponse.getResult()
+                );
+
+                initialResponse = agentClient.submitToolResponse(
+                    request.getConversationId(),
+                    toolResponse
+                );
+            }
+        }
+
+        return initialResponse;
+    }
+}
+```
+
+## Azure Machine Learning Integration
+
+Integrating MCP with Azure ML lets you execute ML pipelines and register trained models as callable MCP tools.
+
+### Python Implementation
+
+```python
+# Python Azure AI Integration
+from mcp_client import McpClient
+from azure.ai.ml import MLClient
+from azure.identity import DefaultAzureCredential
+from azure.ai.ml.entities import Environment, AmlCompute
+import asyncio
+
+class EnterpriseAiIntegration:
+    def __init__(self, mcp_server_url, subscription_id, resource_group, workspace_name):
+        self.mcp_client = McpClient(server_url=mcp_server_url)
+        self.credential = DefaultAzureCredential()
+        self.ml_client = MLClient(
+            self.credential,
+            subscription_id,
+            resource_group,
+            workspace_name
+        )
+
+    async def execute_ml_pipeline(self, pipeline_name, input_data):
+        """Executes an ML pipeline in Azure ML after preprocessing via MCP."""
+        processed_data = await self.mcp_client.execute_tool(
+            "dataPreprocessor",
+            {
+                "data": input_data,
+                "operations": ["normalize", "clean", "transform"]
+            }
+        )
+
+        pipeline_job = self.ml_client.jobs.create_or_update(
+            entity={
+                "name": pipeline_name,
+                "display_name": f"MCP-triggered {pipeline_name}",
+                "experiment_name": "mcp-integration",
+                "inputs": {
+                    "processed_data": processed_data.result
+                }
+            }
+        )
+
+        return {
+            "job_id": pipeline_job.id,
+            "status": pipeline_job.status,
+            "creation_time": pipeline_job.creation_context.created_at
+        }
+
+    async def register_ml_model_as_tool(self, model_name, model_version="latest"):
+        """Registers an Azure ML model as an MCP tool."""
+        if model_version == "latest":
+            model = self.ml_client.models.get(name=model_name, label="latest")
+        else:
+            model = self.ml_client.models.get(name=model_name, version=model_version)
+
+        # Build JSON schema from model signature
+        tool_schema = {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+
+        for input_name, input_spec in model.signature.inputs.items():
+            tool_schema["properties"][input_name] = {
+                "type": self._map_ml_type_to_json_type(input_spec.type)
+            }
+            tool_schema["required"].append(input_name)
+
+        return {
+            "model_name": model_name,
+            "model_version": model.version,
+            "tool_schema": tool_schema
+        }
+
+    def _map_ml_type_to_json_type(self, ml_type):
+        mapping = {
+            "float": "number",
+            "int": "integer",
+            "bool": "boolean",
+            "str": "string",
+            "object": "object",
+            "array": "array"
+        }
+        return mapping.get(ml_type, "string")
+```
+
+<Note>
+  The `register_ml_model_as_tool` method introspects the model's signature to auto-generate a JSON schema, making any Azure ML model immediately callable as an MCP tool without manual schema authoring.
+</Note>
+
+## Key Takeaways
+
+<CardGroup cols={2}>
+  <Card title="Tool orchestration" icon="wrench">
+    MCP bridges AI Foundry agents to any registered tool, routing calls automatically based on tool name
+  </Card>
+  <Card title="Async-first design" icon="bolt">
+    Use async Python for long-running operations like ML pipeline submission and model registration
+  </Card>
+  <Card title="Schema generation" icon="code">
+    Derive MCP tool schemas from Azure ML model signatures to eliminate manual maintenance
+  </Card>
+  <Card title="Credential management" icon="key">
+    Use `DefaultAzureCredential` for seamless authentication across local dev and cloud environments
+  </Card>
+</CardGroup>

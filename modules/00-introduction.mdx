@@ -1,0 +1,234 @@
+---
+title: "Module 0: Introduction to MCP"
+description: "Understand what the Model Context Protocol is, why it exists, and how it fits into the larger world of AI development."
+sidebarTitle: "00 · Introduction"
+---
+
+Generative AI applications are a great step forward — they let users interact using natural language prompts. But as those apps grow more complex, you need a consistent architecture to extend them reliably, support multiple models, and avoid re-building integrations from scratch. This is where MCP comes in.
+
+## Learning Objectives
+
+By the end of this module, you'll be able to:
+
+- Define the Model Context Protocol and its use cases
+- Understand how MCP standardizes model-to-tool communication
+- Identify the core components of MCP architecture
+- Describe real-world applications of MCP in enterprise and development contexts
+
+## What Is the Model Context Protocol?
+
+The **Model Context Protocol (MCP)** is an open, standardized interface that allows Large Language Models (LLMs) to interact seamlessly with external tools, APIs, and data sources. It provides a consistent architecture to enhance AI model functionality beyond training data, enabling smarter, scalable, and more responsive AI systems.
+
+<Info>
+  MCP acts as a universal standard for AI interactions — much like how USB-C standardized physical device connections. Instead of every AI model needing custom code to work with every tool, MCP creates a universal way for them to communicate.
+</Info>
+
+## Why Standardization in AI Matters
+
+Before MCP, integrating models with tools required:
+
+- Custom code per tool-model pair
+- Non-standard APIs for each vendor
+- Fragile integrations that broke with updates
+- Poor scalability when adding more tools
+
+MCP addresses these problems by unifying model-tool integrations, reducing brittle one-off solutions, and allowing multiple models from different vendors to coexist within a single ecosystem.
+
+| Benefit | Description |
+|---|---|
+| **Interoperability** | LLMs work seamlessly with tools across different vendors |
+| **Consistency** | Uniform behavior across platforms and tools |
+| **Reusability** | Tools built once can be used across projects and systems |
+| **Accelerated Development** | Reduce dev time by using standardized, plug-and-play interfaces |
+
+<Note>
+  While MCP bills itself as an open standard, there are currently no plans to standardize it through bodies such as IEEE, IETF, W3C, or ISO.
+</Note>
+
+## MCP Architecture Overview
+
+MCP follows a **client-server model** with three primary roles:
+
+- **MCP Hosts** — AI applications (like Claude Desktop or VS Code) that run models and coordinate connections
+- **MCP Clients** — Protocol clients embedded in the Host that maintain 1:1 connections with servers
+- **MCP Servers** — Lightweight programs that expose specific capabilities (tools, data, prompts) through the standardized protocol
+
+### How a Request Flows Through MCP
+
+<Steps>
+  <Step title="User initiates a request">
+    A user interacts with an application (the MCP Host). The Host passes the request to the AI model.
+  </Step>
+  <Step title="AI model identifies needed tools">
+    The model determines it needs external data or an action (e.g., a web search, database query, or calculation) and issues a tool call.
+  </Step>
+  <Step title="Host routes to MCP Server">
+    The MCP Host — not the model directly — sends the tool call to the appropriate MCP Server using the standardized protocol. The Host's Tool Registry identifies which server to use.
+  </Step>
+  <Step title="Server executes and returns">
+    The MCP Server executes the requested operation and returns a structured result to the Host.
+  </Step>
+  <Step title="Model generates final response">
+    The Host relays the tool output to the model, which incorporates it into a final response and sends it back to the user.
+  </Step>
+</Steps>
+
+### MCP Host Components
+
+The Host does more than forward requests — it manages the entire lifecycle:
+
+- **Tool Registry** — maintains a catalog of available tools and their capabilities
+- **Authentication** — verifies permissions for tool access
+- **Request Handler** — processes incoming tool requests from the model
+- **Response Formatter** — structures tool outputs into a format the model understands
+
+## Server Primitives
+
+MCP servers expose three types of primitives:
+
+<CardGroup cols={3}>
+  <Card title="Resources" icon="database">
+    Static or dynamic data that provides context to AI models — files, database records, API responses, knowledge bases. Identified by URIs like `file://documents/spec.md` or `api://weather/current`.
+  </Card>
+  <Card title="Prompts" icon="message-square">
+    Reusable templates that structure interactions with language models. Support variable substitution and define standardized workflows for common tasks.
+  </Card>
+  <Card title="Tools" icon="wrench">
+    Executable functions that AI models can invoke with specific parameters. Defined with JSON Schema validation and support behavioral annotations like `readOnlyHint` or `destructiveHint`.
+  </Card>
+</CardGroup>
+
+## Real-World Use Cases
+
+| Application | Description |
+|---|---|
+| **Enterprise Data Integration** | Connect LLMs to databases, CRMs, or internal tools |
+| **Agentic AI Systems** | Enable autonomous agents with tool access and decision-making workflows |
+| **Multi-modal Applications** | Combine text, image, and audio tools within a single unified AI app |
+| **Real-time Data Integration** | Bring live data into AI interactions for more accurate, current outputs |
+
+### Scalable Agent Solution
+
+One of MCP's most powerful properties is federating tools and knowledge across servers. A single LLM can connect to multiple MCP servers simultaneously, and those servers can even communicate with each other through a universal connector:
+
+- **ServerA** provides knowledge and tools for one domain (e.g., your company's internal data)
+- **ServerB** provides knowledge and tools for another (e.g., a third-party API)
+- Both are discoverable dynamically — adding a new MCP server to an agent's system makes its functions immediately usable without requiring changes to the agent's instructions
+
+## Protocol Foundation
+
+MCP uses a two-layer architecture:
+
+<Tabs>
+  <Tab title="Data Layer">
+    Built on **JSON-RPC 2.0**, the data layer defines message structure, semantics, and interaction patterns. It handles:
+    - Connection initialization and capability negotiation
+    - Server primitives: tools, resources, prompts
+    - Client primitives: sampling, elicitation, roots, logging
+    - Real-time notifications for dynamic updates
+  </Tab>
+  <Tab title="Transport Layer">
+    Manages communication channels between MCP participants. Two supported mechanisms:
+
+    **STDIO** — uses standard input/output streams for direct local process communication. Optimal for local servers with no network overhead.
+
+    **Streamable HTTP** — uses HTTP POST for client-to-server messages with optional Server-Sent Events (SSE) for streaming. Enables remote server communication across networks with OAuth-based authentication.
+  </Tab>
+</Tabs>
+
+## Building an MCP Server: Quick Preview
+
+Here's how you register a tool on an MCP server in four popular languages:
+
+<CodeGroup>
+```python Python (FastMCP)
+from fastmcp import FastMCP
+
+mcp = FastMCP(name="Weather MCP Server", version="1.0.0")
+
+@mcp.tool()
+def get_weather(location: str) -> dict:
+    """Gets current weather for a location."""
+    return {
+        "temperature": 72.5,
+        "conditions": "Sunny",
+        "location": location
+    }
+```
+
+```typescript TypeScript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+const server = new McpServer({ name: "Weather MCP Server", version: "1.0.0" });
+
+server.tool(
+  "weatherTool",
+  { location: z.string().describe("The location to get weather for") },
+  async ({ location }) => ({
+    content: [{ type: "text", text: `Current weather for ${location}: 72.5°F, Sunny` }]
+  })
+);
+```
+
+```csharp C#
+var server = new McpServer(name: "Weather MCP Server", version: "1.0.0");
+
+server.AddTool<string, WeatherData>(
+    "weatherTool",
+    description: "Gets current weather for a location",
+    execute: async (location) => await GetWeatherDataAsync(location)
+);
+```
+
+```java Java
+McpServer server = McpServer.builder()
+    .name("Weather MCP Server")
+    .version("1.0.0")
+    .build();
+
+server.registerTool(McpToolDefinition.builder("weatherTool")
+    .description("Gets current weather for a location")
+    .parameter("location", String.class)
+    .execute((ctx) -> ToolResponse.content(
+        "Temperature: 72.5°F, Conditions: Sunny, Location: " + ctx.getParameter("location", String.class)
+    ))
+    .build());
+```
+</CodeGroup>
+
+## Practical Benefits of MCP
+
+- **Freshness** — models can access up-to-date information beyond their training data
+- **Capability Extension** — models can leverage specialized tools for tasks they weren't trained for
+- **Reduced Hallucinations** — external data sources provide factual grounding
+- **Privacy** — sensitive data can stay within secure environments instead of being embedded in prompts
+
+## Exercise
+
+Think about an AI application you're interested in building:
+
+1. Which external tools or data sources could enhance its capabilities?
+2. How might MCP make that integration simpler and more reliable?
+3. Would your server expose Resources, Prompts, or Tools — or a combination?
+
+## SDK Links
+
+<CardGroup cols={2}>
+  <Card title="Python SDK" icon="code" href="https://github.com/modelcontextprotocol/python-sdk">
+    The official Python SDK for building MCP servers and clients.
+  </Card>
+  <Card title="TypeScript SDK" icon="code" href="https://github.com/modelcontextprotocol/typescript-sdk">
+    The official TypeScript/JavaScript SDK.
+  </Card>
+  <Card title="Java SDK" icon="code" href="https://github.com/modelcontextprotocol/java-sdk">
+    The official Java SDK for MCP implementations.
+  </Card>
+  <Card title="C#/.NET SDK" icon="code" href="https://github.com/modelcontextprotocol/csharp-sdk">
+    The official C#/.NET SDK for MCP.
+  </Card>
+</CardGroup>
+
+## What's Next
+
+Now that you understand what MCP is and why it matters, continue to [Module 1: Core Concepts](/modules/01-core-concepts) to dive deep into the client-server architecture, all MCP primitives, and the full information flow.

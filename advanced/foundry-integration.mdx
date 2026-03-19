@@ -1,0 +1,302 @@
+---
+title: "Azure AI Foundry Agent Integration"
+description: "Integrate MCP servers with Azure AI Foundry agents for powerful tool orchestration and enterprise AI capabilities with standardized external data source connections."
+---
+
+## Overview
+
+This guide demonstrates how to integrate Model Context Protocol (MCP) servers with Azure AI Foundry agents. The integration combines MCP's open tool ecosystem with Azure AI Foundry's robust agent framework for enterprise-grade AI solutions.
+
+<Note>
+  MCP in Azure AI Foundry Agent Service is currently only supported in these regions: **westus**, **westus2**, **uaenorth**, **southindia**, and **switzerlandnorth**.
+</Note>
+
+## What is MCP in this context?
+
+Model Context Protocol is a standardized way for AI applications to connect to external data sources and tools.
+
+<CardGroup cols={2}>
+  <Card title="Standardized Integration" icon="plug">
+    Consistent interface across different tools and services
+  </Card>
+  <Card title="Security" icon="shield">
+    Secure authentication and authorization mechanisms
+  </Card>
+  <Card title="Flexibility" icon="arrows-maximize">
+    Support for various data sources, APIs, and custom tools
+  </Card>
+  <Card title="Extensibility" icon="puzzle-piece">
+    Easy to add new capabilities and integrations
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An Azure subscription with AI Foundry access
+- Python 3.10+ or .NET 8.0+
+- Azure CLI installed and configured
+- Appropriate permissions to create AI resources
+
+## Python Implementation
+
+<Steps>
+  <Step title="Install required packages">
+    ```bash
+    pip install azure-ai-projects -U
+    pip install azure-ai-agents==1.1.0b4 -U
+    pip install azure-identity -U
+    pip install mcp==1.11.0 -U
+    ```
+  </Step>
+  <Step title="Import dependencies">
+    ```python
+    import os, time
+    from azure.ai.projects import AIProjectClient
+    from azure.identity import DefaultAzureCredential
+    from azure.ai.agents.models import (
+        McpTool,
+        RequiredMcpToolCall,
+        SubmitToolApprovalAction,
+        ToolApproval
+    )
+    ```
+  </Step>
+  <Step title="Configure MCP settings">
+    ```python
+    mcp_server_url = os.environ.get(
+        "MCP_SERVER_URL",
+        "https://learn.microsoft.com/api/mcp"
+    )
+    mcp_server_label = os.environ.get("MCP_SERVER_LABEL", "mslearn")
+    ```
+  </Step>
+  <Step title="Initialize project client">
+    ```python
+    project_client = AIProjectClient(
+        endpoint="https://your-project-endpoint.services.ai.azure.com/api/projects/your-project",
+        credential=DefaultAzureCredential(),
+    )
+    ```
+  </Step>
+  <Step title="Create MCP tool and run agent">
+    ```python
+    mcp_tool = McpTool(
+        server_label=mcp_server_label,
+        server_url=mcp_server_url,
+        allowed_tools=[],  # Empty list allows all tools
+    )
+
+    with project_client:
+        agents_client = project_client.agents
+
+        agent = agents_client.create_agent(
+            model="Your AOAI Model Deployment",
+            name="my-mcp-agent",
+            instructions="You are a helpful agent that can use MCP tools to assist users.",
+            tools=mcp_tool.definitions,
+        )
+        print(f"Created agent, ID: {agent.id}")
+
+        thread = agents_client.threads.create()
+        message = agents_client.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content="What's difference between Azure OpenAI and OpenAI?",
+        )
+
+        mcp_tool.update_headers("SuperSecret", "123456")
+        run = agents_client.runs.create(
+            thread_id=thread.id,
+            agent_id=agent.id,
+            tool_resources=mcp_tool.resources
+        )
+
+        while run.status in ["queued", "in_progress", "requires_action"]:
+            time.sleep(1)
+            run = agents_client.runs.get(thread_id=thread.id, run_id=run.id)
+
+            if run.status == "requires_action" and isinstance(
+                run.required_action, SubmitToolApprovalAction
+            ):
+                tool_calls = run.required_action.submit_tool_approval.tool_calls
+                tool_approvals = []
+
+                for tool_call in tool_calls:
+                    if isinstance(tool_call, RequiredMcpToolCall):
+                        tool_approvals.append(
+                            ToolApproval(
+                                tool_call_id=tool_call.id,
+                                approve=True,
+                                headers=mcp_tool.headers,
+                            )
+                        )
+
+                if tool_approvals:
+                    agents_client.runs.submit_tool_outputs(
+                        thread_id=thread.id,
+                        run_id=run.id,
+                        tool_approvals=tool_approvals
+                    )
+
+        print(f"Run completed with status: {run.status}")
+
+        messages = agents_client.messages.list(thread_id=thread.id)
+        for msg in messages:
+            if msg.text_messages:
+                last_text = msg.text_messages[-1]
+                print(f"{msg.role.upper()}: {last_text.text.value}")
+    ```
+  </Step>
+</Steps>
+
+## .NET Implementation
+
+<Steps>
+  <Step title="Install required packages">
+    ```csharp
+    #r "nuget: Azure.AI.Agents.Persistent, 1.1.0-beta.4"
+    #r "nuget: Azure.Identity, 1.14.2"
+    ```
+  </Step>
+  <Step title="Configure settings and create agent">
+    ```csharp
+    using Azure.AI.Agents.Persistent;
+    using Azure.Identity;
+
+    var projectEndpoint = "https://your-project-endpoint.services.ai.azure.com/api/projects/your-project";
+    var modelDeploymentName = "Your AOAI Model Deployment";
+    var mcpServerUrl = "https://learn.microsoft.com/api/mcp";
+    var mcpServerLabel = "mslearn";
+
+    PersistentAgentsClient agentClient = new(projectEndpoint, new DefaultAzureCredential());
+
+    MCPToolDefinition mcpTool = new(mcpServerLabel, mcpServerUrl);
+
+    PersistentAgent agent = await agentClient.Administration.CreateAgentAsync(
+        model: modelDeploymentName,
+        name: "my-learn-agent",
+        instructions: "You are a helpful agent that can use MCP tools to assist users.",
+        tools: [mcpTool]
+    );
+    ```
+  </Step>
+  <Step title="Run the agent with tool approvals">
+    ```csharp
+    PersistentAgentThread thread = await agentClient.Threads.CreateThreadAsync();
+
+    PersistentThreadMessage message = await agentClient.Messages.CreateMessageAsync(
+        thread.Id,
+        MessageRole.User,
+        "What's difference between Azure OpenAI and OpenAI?");
+
+    MCPToolResource mcpToolResource = new(mcpServerLabel);
+    mcpToolResource.UpdateHeader("SuperSecret", "123456");
+    ToolResources toolResources = mcpToolResource.ToToolResources();
+
+    ThreadRun run = await agentClient.Runs.CreateRunAsync(thread, agent, toolResources);
+
+    while (run.Status == RunStatus.Queued
+        || run.Status == RunStatus.InProgress
+        || run.Status == RunStatus.RequiresAction)
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(1000));
+        run = await agentClient.Runs.GetRunAsync(thread.Id, run.Id);
+
+        if (run.Status == RunStatus.RequiresAction
+            && run.RequiredAction is SubmitToolApprovalAction toolApprovalAction)
+        {
+            var toolApprovals = new List<ToolApproval>();
+            foreach (var toolCall in toolApprovalAction.SubmitToolApproval.ToolCalls)
+            {
+                if (toolCall is RequiredMcpToolCall mcpToolCall)
+                {
+                    toolApprovals.Add(new ToolApproval(mcpToolCall.Id, approve: true)
+                    {
+                        Headers = { ["SuperSecret"] = "123456" }
+                    });
+                }
+            }
+
+            if (toolApprovals.Count > 0)
+            {
+                run = await agentClient.Runs.SubmitToolOutputsToRunAsync(
+                    thread.Id, run.Id, toolApprovals: toolApprovals);
+            }
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## MCP Tool Configuration
+
+<CodeGroup>
+```python Python
+mcp_tool = McpTool(
+    server_label="unique_server_name",       # Identifier for the MCP server
+    server_url="https://api.example.com/mcp", # MCP server endpoint
+    allowed_tools=[],                         # Optional: specify allowed tools
+)
+```
+
+```csharp .NET
+MCPToolDefinition mcpTool = new(
+    "unique_server_name",                    // Server label
+    "https://api.example.com/mcp"           // MCP server URL
+);
+```
+</CodeGroup>
+
+## Authentication and Headers
+
+Both implementations support custom headers for passing API keys or session tokens:
+
+<CodeGroup>
+```python Python
+mcp_tool.update_headers("SuperSecret", "123456")
+```
+
+```csharp .NET
+MCPToolResource mcpToolResource = new(mcpServerLabel);
+mcpToolResource.UpdateHeader("SuperSecret", "123456");
+```
+</CodeGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection issues">
+    - Verify the MCP server URL is accessible from the Azure region
+    - Check authentication credentials and header values
+    - Ensure network connectivity between Foundry and the MCP server
+  </Accordion>
+  <Accordion title="Tool call failures">
+    - Review tool arguments and formatting match the server's expected schema
+    - Check server-specific requirements in the MCP server documentation
+    - Implement proper error handling around `submit_tool_outputs`
+  </Accordion>
+  <Accordion title="Performance issues">
+    - Optimize tool call frequency and batch where possible
+    - Implement caching for frequently accessed data
+    - Monitor server response times via Azure Application Insights
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom MCP servers" icon="server" href="/advanced/azure-integration">
+    Build your own MCP servers for proprietary data sources
+  </Card>
+  <Card title="OAuth2 security" icon="lock" href="/advanced/oauth2">
+    Add OAuth2 or custom authentication mechanisms
+  </Card>
+  <Card title="Scaling" icon="chart-line" href="/advanced/scaling">
+    Consider load balancing and distributed MCP server architectures
+  </Card>
+  <Card title="Context engineering" icon="brain" href="/advanced/context-engineering">
+    Optimize how context flows through your agent pipelines
+  </Card>
+</CardGroup>

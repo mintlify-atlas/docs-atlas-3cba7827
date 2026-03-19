@@ -1,0 +1,440 @@
+---
+title: "Module 4: Practical Implementation"
+description: "Build, test, and deploy MCP applications using official SDKs in C#, Java, TypeScript, JavaScript, and Python — with pagination, API management, and Azure deployment."
+---
+
+Practical implementation is where MCP's power becomes tangible. This module bridges conceptual knowledge and hands-on development, guiding you through building, testing, and deploying MCP-based applications with real tools and workflows.
+
+<Info>
+  This module covers MCP SDKs aligned with **MCP Specification 2025-11-25**. The C# SDK is currently in preview and APIs may change.
+</Info>
+
+## Learning objectives
+
+By the end of this module, you will be able to:
+
+- Implement MCP solutions using official SDKs in C#, Java, TypeScript, JavaScript, and Python
+- Debug and test MCP servers systematically
+- Create and use server features — Resources, Prompts, and Tools
+- Handle large result sets with cursor-based pagination
+- Secure and deploy MCP servers to Azure
+
+## Official SDKs
+
+MCP provides official SDKs for multiple languages:
+
+<CardGroup cols={3}>
+  <Card title="C# SDK" icon="code" href="https://github.com/modelcontextprotocol/csharp-sdk">
+    NuGet package `ModelContextProtocol` — preview
+  </Card>
+  <Card title="Java SDK" icon="java" href="https://github.com/modelcontextprotocol/java-sdk">
+    Requires Project Reactor for reactive programming
+  </Card>
+  <Card title="TypeScript SDK" icon="js" href="https://github.com/modelcontextprotocol/typescript-sdk">
+    Full SDK for Node.js and browser environments
+  </Card>
+  <Card title="Python SDK" icon="python" href="https://github.com/modelcontextprotocol/python-sdk">
+    Async/await support with FastAPI integration
+  </Card>
+  <Card title="Kotlin SDK" icon="code" href="https://github.com/modelcontextprotocol/kotlin-sdk">
+    JVM-based SDK for Kotlin projects
+  </Card>
+  <Card title="Go SDK" icon="code" href="https://github.com/modelcontextprotocol/go-sdk">
+    Idiomatic Go implementation
+  </Card>
+</CardGroup>
+
+## Core server features
+
+Every MCP server can implement any combination of three primitives:
+
+<AccordionGroup>
+  <Accordion title="Resources">
+    Resources provide context and data for the user or AI model:
+
+    - Document repositories and knowledge bases
+    - Structured data sources and file systems
+    - Any external data that enriches model context
+  </Accordion>
+  <Accordion title="Prompts">
+    Prompts are templated messages and guided workflows:
+
+    - Pre-defined conversation templates
+    - Guided interaction patterns for specific tasks
+    - Specialized dialogue structures that ensure consistency
+  </Accordion>
+  <Accordion title="Tools">
+    Tools are functions the AI model can invoke:
+
+    - Data processing utilities
+    - External API integrations
+    - Computational capabilities and search functionality
+  </Accordion>
+</AccordionGroup>
+
+## Language-specific implementations
+
+<Tabs>
+  <Tab title="C#">
+    The C# SDK integrates with ASP.NET Core and supports the full MCP feature set.
+
+    **Key features:**
+    - NuGet package: [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol)
+    - ASP.NET Core integration
+    - Tool registration with authentication and error handling
+    - Multiple implementation patterns for tools of varying complexity
+
+    See the [official C# SDK samples repository](https://github.com/modelcontextprotocol/csharp-sdk) for complete examples.
+  </Tab>
+  <Tab title="Java">
+    The Java SDK offers enterprise-grade features through Spring Framework integration.
+
+    **Key features:**
+    - Spring Framework integration
+    - Strong type safety
+    - Reactive programming support via Project Reactor
+    - Comprehensive error handling
+
+    See the [Java with Spring sample](https://github.com/modelcontextprotocol/java-sdk) for a complete containerized implementation.
+  </Tab>
+  <Tab title="TypeScript">
+    The TypeScript SDK provides a flexible approach with first-class type support.
+
+    **Key features:**
+    - Node.js and browser support
+    - Promise-based API
+    - Easy integration with Express and other frameworks
+    - WebSocket support for streaming
+
+    See the [TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) for samples and documentation.
+  </Tab>
+  <Tab title="JavaScript">
+    The JavaScript SDK provides a lightweight approach for Node.js environments.
+
+    **Key features:**
+    - Node.js and browser support
+    - Promise-based API
+    - Easy integration with Express and other frameworks
+    - WebSocket support for streaming
+
+    See the samples directory for complete JavaScript examples.
+  </Tab>
+  <Tab title="Python">
+    The Python SDK offers a Pythonic approach with excellent ML framework integrations.
+
+    **Key features:**
+    - Async/await support with asyncio
+    - FastAPI integration
+    - Simple tool registration decorators
+    - Native integration with popular ML libraries
+
+    See the [Python SDK](https://github.com/modelcontextprotocol/python-sdk) for samples.
+  </Tab>
+</Tabs>
+
+## Pagination and large result sets
+
+When your server handles large datasets, you need pagination to manage memory efficiently and provide responsive experiences.
+
+### Why pagination matters
+
+Without pagination, large responses cause:
+
+- **Memory exhaustion** — loading millions of records at once
+- **Slow response times** — users wait while all data loads
+- **Timeout errors** — requests exceed time limits
+- **Poor AI performance** — LLMs struggle with massive context windows
+
+MCP uses **cursor-based pagination** for reliable, consistent paging through result sets.
+
+### How cursor-based pagination works
+
+A **cursor** is an opaque string that marks your position in a result set — think of it as a bookmark in a long book.
+
+These MCP methods support pagination:
+
+| Method | Returns | Cursor support |
+|--------|---------|----------------|
+| `tools/list` | Tool definitions | Yes |
+| `resources/list` | Resource definitions | Yes |
+| `prompts/list` | Prompt definitions | Yes |
+| `resources/templates/list` | Resource templates | Yes |
+
+### Server-side pagination
+
+<CodeGroup>
+
+```python server.py
+from mcp.server import Server
+from mcp.types import Tool, ListToolsResult
+
+app = Server("paginated-server")
+
+ALL_TOOLS = [
+    Tool(name=f"tool_{i}", description=f"Tool number {i}", inputSchema={})
+    for i in range(100)
+]
+
+PAGE_SIZE = 10
+
+@app.list_tools()
+async def list_tools(cursor: str | None = None) -> ListToolsResult:
+    start_index = 0
+    if cursor:
+        try:
+            start_index = int(cursor)
+        except ValueError:
+            start_index = 0
+
+    end_index = min(start_index + PAGE_SIZE, len(ALL_TOOLS))
+    page_tools = ALL_TOOLS[start_index:end_index]
+
+    next_cursor = str(end_index) if end_index < len(ALL_TOOLS) else None
+
+    return ListToolsResult(tools=page_tools, nextCursor=next_cursor)
+```
+
+```typescript server.ts
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsResultSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "paginated-server", version: "1.0.0" });
+
+const ALL_TOOLS = Array.from({ length: 100 }, (_, i) => ({
+  name: `tool_${i}`,
+  description: `Tool number ${i}`,
+  inputSchema: { type: "object", properties: {} }
+}));
+
+const PAGE_SIZE = 10;
+
+server.setRequestHandler(ListToolsResultSchema, async (request) => {
+  let startIndex = 0;
+  if (request.params?.cursor) {
+    startIndex = parseInt(request.params.cursor, 10) || 0;
+  }
+
+  const endIndex = Math.min(startIndex + PAGE_SIZE, ALL_TOOLS.length);
+  const pageTools = ALL_TOOLS.slice(startIndex, endIndex);
+  const nextCursor = endIndex < ALL_TOOLS.length ? String(endIndex) : undefined;
+
+  return { tools: pageTools, nextCursor };
+});
+```
+
+```java PaginatedToolService.java
+@Service
+public class PaginatedToolService {
+    private static final int PAGE_SIZE = 10;
+    private final List<Tool> allTools;
+
+    public PaginatedToolService() {
+        this.allTools = IntStream.range(0, 100)
+            .mapToObj(i -> new Tool("tool_" + i, "Tool number " + i, Map.of()))
+            .collect(Collectors.toList());
+    }
+
+    @McpMethod("tools/list")
+    public ListToolsResult listTools(@Param("cursor") String cursor) {
+        int startIndex = 0;
+        if (cursor != null && !cursor.isEmpty()) {
+            try { startIndex = Integer.parseInt(cursor); }
+            catch (NumberFormatException e) { startIndex = 0; }
+        }
+
+        int endIndex = Math.min(startIndex + PAGE_SIZE, allTools.size());
+        List<Tool> pageTools = allTools.subList(startIndex, endIndex);
+        String nextCursor = endIndex < allTools.size() ? String.valueOf(endIndex) : null;
+
+        return new ListToolsResult(pageTools, nextCursor);
+    }
+}
+```
+
+</CodeGroup>
+
+### Client-side pagination
+
+<CodeGroup>
+
+```python client.py
+from mcp import ClientSession
+
+async def get_all_tools(session: ClientSession) -> list:
+    """Fetch all tools using cursor-based pagination."""
+    all_tools = []
+    cursor = None
+
+    while True:
+        result = await session.list_tools(cursor=cursor)
+        all_tools.extend(result.tools)
+
+        if result.nextCursor is None:
+            break
+        cursor = result.nextCursor
+
+    return all_tools
+```
+
+```typescript client.ts
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+async function getAllTools(client: Client): Promise<Tool[]> {
+  const allTools: Tool[] = [];
+  let cursor: string | undefined = undefined;
+
+  do {
+    const result = await client.listTools({ cursor });
+    allTools.push(...result.tools);
+    cursor = result.nextCursor;
+  } while (cursor);
+
+  return allTools;
+}
+```
+
+</CodeGroup>
+
+### Cursor design strategies
+
+<AccordionGroup>
+  <Accordion title="Index-based (simple)">
+    The cursor is just the numeric offset into the result set.
+
+    ```python
+    cursor = "50"  # Start at item 50
+    ```
+
+    **Pros:** Simple and stateless.
+    **Cons:** Results can shift if items are added or removed between pages.
+  </Accordion>
+  <Accordion title="ID-based (stable)">
+    The cursor is the ID of the last seen item.
+
+    ```python
+    cursor = "item_abc123"  # Start after this item
+    ```
+
+    **Pros:** Stable even if items change.
+    **Cons:** Requires ordered IDs.
+  </Accordion>
+  <Accordion title="Encoded state (complex)">
+    The cursor encodes multiple state fields as a base64 string.
+
+    ```python
+    import base64, json
+
+    def encode_cursor(state: dict) -> str:
+        return base64.b64encode(json.dumps(state).encode()).decode()
+
+    cursor = encode_cursor({"offset": 50, "filter": "active", "sort": "name"})
+    ```
+
+    **Pros:** Can encode complex query state.
+    **Cons:** More complex; produces larger cursor strings.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Never load all results into memory and paginate client-side. Always paginate at the data source to avoid memory exhaustion and timeouts.
+</Warning>
+
+## API management with Azure
+
+Azure API Management (APIM) is a reliable solution for securing MCP servers. Placing APIM in front of your MCP server gives you:
+
+- **Rate limiting** — prevent abuse and ensure fair usage
+- **Token management** — centralized API key and OAuth handling
+- **Monitoring** — request logging via Azure Monitor
+- **Load balancing** — distribute traffic across server instances
+- **Security** — authentication and authorization enforcement
+
+### Deploy a secured MCP server to Azure
+
+<Steps>
+  <Step title="Clone the sample repository">
+    ```bash
+    git clone https://github.com/Azure-Samples/remote-mcp-apim-functions-python.git
+    cd remote-mcp-apim-functions-python
+    ```
+  </Step>
+  <Step title="Register the Microsoft.App resource provider">
+    ```bash
+    az provider register --namespace Microsoft.App --wait
+    ```
+  </Step>
+  <Step title="Provision all Azure resources">
+    ```bash
+    azd up
+    ```
+
+    This deploys the API Management service, Function App, and all required Azure resources.
+  </Step>
+  <Step title="Test with MCP Inspector">
+    In a new terminal, install and launch the inspector:
+
+    ```bash
+    npx @modelcontextprotocol/inspector
+    ```
+
+    Set the transport type to **SSE** and the URL to your APIM SSE endpoint:
+
+    ```
+    https://<apim-servicename>.azure-api.net/mcp/sse
+    ```
+
+    Click **List Tools**, then select and run a tool to verify the connection.
+  </Step>
+</Steps>
+
+The authorization flow uses Microsoft Entra for authentication, APIM policies to direct traffic, and Azure Monitor for logging all requests.
+
+## Azure Functions quickstart templates
+
+The `remote-mcp-functions` template set lets you build and deploy custom remote MCP servers using Azure Functions:
+
+<CardGroup cols={3}>
+  <Card title="Python" icon="python" href="https://github.com/Azure-Samples/remote-mcp-functions-python">
+    Build and deploy with Azure Functions and Python
+  </Card>
+  <Card title="C# .NET" icon="code" href="https://github.com/Azure-Samples/remote-mcp-functions-dotnet">
+    Build and deploy with Azure Functions and C# .NET
+  </Card>
+  <Card title="Node/TypeScript" icon="js" href="https://github.com/Azure-Samples/remote-mcp-functions-typescript">
+    Build and deploy with Azure Functions and TypeScript
+  </Card>
+</CardGroup>
+
+All three templates include:
+- Local development and debugging support
+- Security by design with HTTPS and key-based auth
+- OAuth support via built-in auth and APIM
+- Network isolation with Azure Virtual Networks
+- Simple one-command deployment: `azd up`
+
+## Key takeaways
+
+- MCP SDKs provide language-specific tools for building robust solutions across C#, Java, TypeScript, JavaScript, and Python
+- Use cursor-based pagination for all large result sets — never load everything into memory
+- Debug and test your MCP servers systematically before deploying
+- Azure API Management adds enterprise-grade security, rate limiting, and monitoring to remote MCP servers
+- Reusable prompt templates ensure consistent AI interactions across your application
+
+## Exercise
+
+Design a practical MCP workflow that addresses a real-world problem in your domain:
+
+1. Identify 3–4 tools useful for solving the problem
+2. Create a workflow diagram showing how those tools interact
+3. Implement a basic version of one tool using your preferred language
+4. Add cursor-based pagination if the tool returns a list of items
+5. Create a prompt template that helps the model use your tool effectively
+
+<CardGroup cols={2}>
+  <Card title="Next: Advanced Topics" icon="arrow-right" href="/modules/05-advanced-topics">
+    Explore multi-modal integration, scaling, security, and enterprise patterns
+  </Card>
+  <Card title="MCP Specification" icon="file-code" href="https://spec.modelcontextprotocol.io/specification/2025-11-25/">
+    Full protocol specification including pagination details
+  </Card>
+</CardGroup>

@@ -1,0 +1,162 @@
+---
+title: "Deploying MCP Servers"
+description: "Deploy your MCP server locally, in Docker containers, and to Azure Container Apps for cloud-scale access."
+---
+
+Deploying your MCP server lets others access its tools and resources beyond your local machine. Depending on your requirements for scalability, reliability, and ease of management, you can choose from local execution, containerized deployment, or a fully managed cloud service.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Evaluate different deployment strategies for MCP servers
+- Run an MCP server locally for end-user distribution
+- Deploy an MCP server to Azure Container Apps
+
+## Deployment strategies
+
+<CardGroup cols={3}>
+  <Card title="Local" icon="laptop">
+    Distribute the server binary or source code. Users run it on their own machines. Best for developer tools and CLI integrations.
+  </Card>
+  <Card title="Containers" icon="box">
+    Package the server as a Docker image. Deploy to any container runtime — Docker Desktop, Kubernetes, or a cloud container service.
+  </Card>
+  <Card title="Cloud" icon="cloud">
+    Use a managed cloud service like Azure Container Apps, AWS ECS, or Google Cloud Run. Best for multi-user or always-on scenarios.
+  </Card>
+</CardGroup>
+
+## Local deployment
+
+If your server is meant to run on users' machines:
+
+<Steps>
+  <Step title="Distribute the server">
+    Share the server source code, a compiled binary, or a package on npm/PyPI.
+  </Step>
+  <Step title="Start the server process">
+    The user (or a host application like VS Code) runs the server:
+    ```bash
+    # stdio server (no networking needed)
+    node build/index.js
+
+    # or Python
+    python server.py
+    ```
+  </Step>
+  <Step title="Connect a client">
+    For HTTP-based servers, configure the client with a local URL:
+    ```text
+    http://localhost:3000
+    ```
+    For stdio servers, the client starts the server as a subprocess automatically.
+  </Step>
+</Steps>
+
+<Note>
+For **stdio** servers, no networking configuration is needed. The client manages the server process lifecycle.
+</Note>
+
+## Azure Container Apps deployment
+
+Azure Container Apps is a fully managed serverless container platform that works well for MCP servers.
+
+<Steps>
+  <Step title="Clone the sample">
+    ```bash
+    git clone https://github.com/anthonychu/azure-container-apps-mcp-sample.git
+    cd azure-container-apps-mcp-sample
+    ```
+  </Step>
+
+  <Step title="Test locally">
+    ```bash
+    uv venv
+    uv sync
+
+    # Linux/macOS
+    export API_KEYS=<your_api_key>
+
+    # Windows
+    set API_KEYS=<your_api_key>
+
+    uv run fastapi dev main.py
+    ```
+
+    Create `.vscode/mcp.json` to connect VS Code to the local server:
+
+    ```json
+    {
+      "inputs": [
+        {
+          "type": "promptString",
+          "id": "weather-api-key",
+          "description": "Weather API Key",
+          "password": true
+        }
+      ],
+      "servers": {
+        "weather-sse": {
+          "type": "sse",
+          "url": "http://localhost:8000/sse",
+          "headers": {
+            "x-api-key": "${input:weather-api-key}"
+          }
+        }
+      }
+    }
+    ```
+
+    Click the play icon in the JSON file. You should see server tools picked up by GitHub Copilot.
+  </Step>
+
+  <Step title="Deploy to Azure Container Apps">
+    Make sure you have the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed and are logged in.
+
+    ```bash
+    az containerapp up \
+      -g <RESOURCE_GROUP_NAME> \
+      -n weather-mcp \
+      --environment mcp \
+      -l westus \
+      --env-vars API_KEYS=<your_api_key> \
+      --source .
+    ```
+
+    Azure Container Apps builds the container image, pushes it to a registry, and deploys it. The command returns a public URL for your server.
+  </Step>
+</Steps>
+
+## Other cloud options
+
+| Platform | Notes |
+|----------|-------|
+| **Azure Functions** | Serverless; good for infrequent workloads. See [Remote MCP with Azure Functions](https://learn.microsoft.com/samples/azure-samples/remote-mcp-functions-dotnet/remote-mcp-functions-dotnet/). |
+| **AWS ECS / Fargate** | Managed container service; similar workflow to Azure Container Apps. |
+| **Google Cloud Run** | Fully managed; scales to zero. |
+| **Kubernetes** | High availability and fine-grained control; more operational overhead. |
+
+## Additional resources
+
+<CardGroup cols={2}>
+  <Card title="Azure Functions + MCP" icon="bolt" href="https://learn.microsoft.com/samples/azure-samples/remote-mcp-functions-dotnet/remote-mcp-functions-dotnet/">
+    Deploy a .NET MCP server as an Azure Function.
+  </Card>
+  <Card title="Azure Container Apps blog post" icon="file-lines" href="https://techcommunity.microsoft.com/blog/appsonazureblog/host-remote-mcp-servers-in-azure-container-apps/4403550">
+    Detailed walkthrough of hosting MCP servers in Azure Container Apps.
+  </Card>
+  <Card title="Azure Container Apps MCP sample" icon="github" href="https://github.com/anthonychu/azure-container-apps-mcp-sample">
+    Reference implementation used in this lesson.
+  </Card>
+  <Card title="Build Agents with MCP on Azure" icon="robot" href="https://learn.microsoft.com/azure/developer/ai/intro-agents-mcp">
+    End-to-end guide for building agents using MCP on Azure.
+  </Card>
+</CardGroup>
+
+## Key takeaways
+
+- Choose local deployment for developer tools and CLI integrations; choose cloud for always-on, multi-user scenarios.
+- For **stdio** servers, no port configuration is needed — the client manages the process.
+- Azure Container Apps provides a straightforward path from local testing to cloud deployment with a single `az containerapp up` command.
+- Serverless options (Azure Functions, Cloud Run) are ideal for infrequent workloads that benefit from scale-to-zero.

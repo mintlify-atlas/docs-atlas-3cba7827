@@ -1,0 +1,190 @@
+---
+title: "Module 5: Advanced Topics"
+description: "Master multi-modal integration, scalability, security, OAuth2, real-time streaming, and enterprise AI integration with Azure for production-ready MCP applications."
+---
+
+This module covers the advanced skills required to deploy MCP in demanding, production environments. Topics include multi-modal integration, horizontal and vertical scaling, security best practices, enterprise AI system integration, and new protocol features introduced in the 2025-11-25 specification.
+
+<Info>
+  **New in MCP Specification 2025-11-25:** Experimental support for **Tasks** (long-running operations with progress tracking), **Tool Annotations** (metadata about tool behavior for safety), **URL Mode Elicitation** (requesting specific URL content from clients), and enhanced **Roots** (workspace context management). See the [MCP Specification changelog](https://spec.modelcontextprotocol.io/) for full details.
+</Info>
+
+## Learning objectives
+
+By the end of this module, you will be able to:
+
+- Implement multi-modal capabilities within MCP frameworks
+- Design scalable MCP architectures for high-demand scenarios
+- Apply security best practices aligned with MCP's security principles
+- Integrate MCP with enterprise AI systems and frameworks
+- Optimize performance and reliability in production environments
+
+## Lessons in this module
+
+<CardGroup cols={2}>
+  <Card title="5.1 Azure Integration" icon="cloud" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-integration">
+    Integrate your MCP server with Azure services
+  </Card>
+  <Card title="5.2 Multi-modal samples" icon="image" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-multi-modality">
+    Audio, image, and multi-modal response examples
+  </Card>
+  <Card title="5.3 OAuth2 demo" icon="lock" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-oauth2-demo">
+    Spring Boot OAuth2 as Authorization and Resource Server
+  </Card>
+  <Card title="5.4 Root contexts" icon="folder-tree" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-root-contexts">
+    Workspace context management with Roots
+  </Card>
+  <Card title="5.5 Routing" icon="arrow-right-arrow-left" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-routing">
+    Request routing strategies across tools and servers
+  </Card>
+  <Card title="5.6 Sampling" icon="chart-bar" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-sampling">
+    Work with MCP sampling for model-driven decisions
+  </Card>
+  <Card title="5.7 Scaling" icon="arrow-up-right-dots" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-scaling">
+    Horizontal and vertical scaling approaches
+  </Card>
+  <Card title="5.8 Security" icon="shield" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-security">
+    Secure your MCP server end-to-end
+  </Card>
+  <Card title="5.9 Web search" icon="magnifying-glass" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/web-search-mcp">
+    Python server + SerpAPI for real-time web search
+  </Card>
+  <Card title="5.10 Real-time streaming" icon="wave-square" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-realtimestreaming">
+    Real-time data streaming over MCP
+  </Card>
+  <Card title="5.11 Real-time web search" icon="globe" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-realtimesearch">
+    Standardized real-time web search with MCP
+  </Card>
+  <Card title="5.12 Entra ID authentication" icon="key" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-security-entra">
+    Microsoft Entra ID for MCP server auth
+  </Card>
+  <Card title="5.13 Azure AI Foundry agents" icon="robot" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-foundry-agent-integration">
+    Integrate MCP servers with Azure AI Foundry agents
+  </Card>
+  <Card title="5.14 Context engineering" icon="brain" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-contextengineering">
+    Context optimization and dynamic context management
+  </Card>
+  <Card title="5.15 Custom transport" icon="plug" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-transport">
+    Implement custom transport mechanisms
+  </Card>
+  <Card title="5.16 Protocol features deep dive" icon="microscope" href="https://github.com/microsoft/mcp-for-beginners/tree/main/05-AdvancedTopics/mcp-protocol-features">
+    Progress notifications, cancellation, resource templates, error patterns
+  </Card>
+</CardGroup>
+
+## Key topic areas
+
+### Multi-modal integration
+
+MCP extends beyond text processing to support image, audio, and video models. Multi-modal implementations:
+
+- Standardize prompt formats across different modalities
+- Enable cross-modal reasoning in a single protocol session
+- Allow AI agents to process screenshots, audio transcripts, and structured data alongside text
+
+### Scalability
+
+Enterprise deployments need to handle varying loads without degrading performance. MCP supports:
+
+- **Horizontal scaling** — multiple server instances behind a load balancer
+- **Vertical scaling** — optimizing a single server instance's resource usage
+- **Stateless design** — enabling scale-out without sticky sessions
+- **Caching** — reducing redundant computation for repeated requests
+
+### Security best practices
+
+MCP's security model is built around explicit user consent, minimal privilege, and defense-in-depth:
+
+<AccordionGroup>
+  <Accordion title="Authentication">
+    Require proper authentication before granting access to tools, resources, or sensitive operations. Use API keys, OAuth tokens, or Microsoft Entra ID for enterprise deployments.
+
+    Lesson 5.12 covers Entra ID authentication in depth, showing how to configure cloud-based identity and access management for your MCP server.
+  </Accordion>
+  <Accordion title="Authorization">
+    Implement role-based access control to ensure clients can only invoke the tools and resources they're permitted to use. Configure which tools a model can access during a session.
+  </Accordion>
+  <Accordion title="Input validation">
+    Validate all tool invocation parameters before execution. Reject malformed or malicious input before it reaches tool implementations.
+  </Accordion>
+  <Accordion title="Rate limiting">
+    Implement rate limiting to prevent abuse and ensure fair usage. Lesson 5.8 demonstrates rate limiting patterns for MCP servers.
+  </Accordion>
+  <Accordion title="Audit logging">
+    Log all tool invocations, resource accesses, and authentication events for compliance and debugging. Azure Monitor integrates directly with MCP server deployments.
+  </Accordion>
+</AccordionGroup>
+
+### Enterprise integration
+
+MCP integrates with enterprise AI systems through standardized interfaces:
+
+- **Azure OpenAI** — connect enterprise LLMs to your MCP tools and resources
+- **Azure AI Foundry** — orchestrate multi-agent workflows with standardized tool access (lesson 5.13)
+- **Microsoft Entra ID** — enterprise identity and access management (lesson 5.12)
+- **Azure API Management** — gateway for remote MCP server deployments
+
+### OAuth2 with MCP
+
+Lesson 5.3 demonstrates a minimal Spring Boot application that implements OAuth2 with MCP as both an Authorization Server and a Resource Server. The sample covers:
+
+- Secure token issuance and validation
+- Protected MCP endpoint configuration
+- Azure Container Apps deployment
+- API Management integration
+
+### Real-time streaming
+
+Lesson 5.10 covers real-time data streaming — critical for applications that require immediate access to information. You'll learn how MCP standardizes streaming context management across AI models and applications.
+
+### Web search integration
+
+Lesson 5.9 builds a Python MCP server and client that integrates with SerpAPI for real-time web, news, product search, and Q&A. It demonstrates:
+
+- Multi-tool orchestration in a single session
+- External API integration patterns
+- Robust error handling for unreliable external sources
+
+## Exercise
+
+Design an enterprise-grade MCP implementation for a specific use case:
+
+1. Identify multi-modal requirements for your use case
+2. Outline the security controls needed to protect sensitive data
+3. Design a scalable architecture that handles varying load
+4. Plan integration points with enterprise AI systems
+5. Document potential performance bottlenecks and mitigation strategies
+
+## Additional resources
+
+<CardGroup cols={2}>
+  <Card title="MCP Specification" icon="file-code" href="https://spec.modelcontextprotocol.io/specification/2025-11-25/">
+    Full protocol specification (2025-11-25)
+  </Card>
+  <Card title="OWASP MCP Top 10" icon="shield" href="https://microsoft.github.io/mcp-azure-security-guide/mcp/">
+    Security risks and mitigations for MCP
+  </Card>
+  <Card title="Azure OpenAI documentation" icon="cloud" href="https://learn.microsoft.com/en-us/azure/ai-services/openai/">
+    Connect enterprise LLMs to your MCP tools
+  </Card>
+  <Card title="Microsoft AI Foundry" icon="robot" href="https://learn.microsoft.com/en-us/ai-services/">
+    Orchestrate multi-agent AI workflows
+  </Card>
+</CardGroup>
+
+## Key takeaways
+
+- Multi-modal MCP implementations extend AI capabilities beyond text processing
+- Scalability requires thoughtful architecture choices — both horizontal and vertical approaches are valid
+- Comprehensive security measures, including authentication, authorization, and rate limiting, are non-negotiable for production
+- Enterprise integration with Azure OpenAI and Azure AI Foundry significantly extends MCP capabilities
+- Advanced MCP implementations benefit from optimized architectures and careful resource management
+
+<CardGroup cols={2}>
+  <Card title="Next: Community Contributions" icon="arrow-right" href="/modules/06-community-contributions">
+    Learn how to contribute to the MCP ecosystem
+  </Card>
+  <Card title="Back: Practical Implementation" icon="arrow-left" href="/modules/04-practical-implementation">
+    Review SDKs, pagination, and Azure deployment
+  </Card>
+</CardGroup>

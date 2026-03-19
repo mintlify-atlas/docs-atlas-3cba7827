@@ -1,0 +1,391 @@
+---
+title: "Custom Transport"
+description: "Implement custom MCP transport mechanisms using Azure Event Grid and Azure Event Hubs for scalable, cloud-native, event-driven architectures."
+---
+
+## Overview
+
+While MCP's standard transports (stdio and HTTP streaming) serve most use cases, enterprise environments often require specialized transport mechanisms for improved scalability and cloud-native integration. This guide covers custom transport implementations using Azure Event Grid and Azure Event Hubs.
+
+<CardGroup cols={2}>
+  <Card title="Azure Event Grid" icon="bolt">
+    Serverless, event-driven routing — ideal for loosely coupled MCP architectures
+  </Card>
+  <Card title="Azure Event Hubs" icon="stream">
+    High-throughput, real-time streaming — ideal for high-frequency MCP interactions
+  </Card>
+</CardGroup>
+
+> **Specification reference**: This guide reflects [MCP Specification 2025-11-25](https://spec.modelcontextprotocol.io/specification/2025-11-25/) transport requirements.
+
+## Transport requirements
+
+```yaml
+Message Protocol:
+  format: "JSON-RPC 2.0 with MCP extensions"
+  bidirectional: "Full duplex communication required"
+  ordering: "Message ordering must be preserved per session"
+
+Transport Layer:
+  reliability: "Transport MUST handle connection failures gracefully"
+  security: "Transport MUST support secure communication"
+  identification: "Each session MUST have unique identifier"
+```
+
+## Azure Event Grid transport
+
+Event Grid provides serverless event routing — ideal for distributing MCP requests across multiple processing nodes.
+
+### Architecture
+
+```
+MCP Client ──► Azure Event Grid ──► MCP Server Function
+                    │
+              ◄─────┘ (response via separate topic)
+```
+
+<CodeGroup>
+```csharp C#
+using Azure.Messaging.EventGrid;
+
+public class EventGridMcpTransport : IMcpTransport
+{
+    private readonly EventGridPublisherClient _publisher;
+    private readonly string _clientId;
+
+    public EventGridMcpTransport(
+        string topicEndpoint, string accessKey, string clientId)
+    {
+        _publisher = new EventGridPublisherClient(
+            new Uri(topicEndpoint),
+            new AzureKeyCredential(accessKey));
+        _clientId = clientId;
+    }
+
+    public async Task SendMessageAsync(McpMessage message)
+    {
+        var eventGridEvent = new EventGridEvent(
+            subject:      $"mcp/{_clientId}",
+            eventType:    "MCP.MessageReceived",
+            dataVersion:  "1.0",
+            data:         JsonSerializer.Serialize(message))
+        {
+            Id        = Guid.NewGuid().ToString(),
+            EventTime = DateTimeOffset.UtcNow
+        };
+
+        await _publisher.SendEventAsync(eventGridEvent);
+    }
+}
+
+// Azure Function receiver
+[FunctionName("McpEventGridReceiver")]
+public async Task<IActionResult> HandleEventGridMessage(
+    [EventGridTrigger] EventGridEvent eventGridEvent,
+    ILogger log)
+{
+    var mcpMessage = JsonSerializer.Deserialize<McpMessage>(
+        eventGridEvent.Data.ToString());
+
+    var response = await _mcpServer.ProcessMessageAsync(mcpMessage);
+    await _transport.SendMessageAsync(response);
+
+    return new OkResult();
+}
+```
+
+```typescript TypeScript
+import { EventGridPublisherClient, AzureKeyCredential } from "@azure/eventgrid";
+
+export class EventGridMcpTransport implements McpTransport {
+    private publisher: EventGridPublisherClient;
+
+    constructor(
+        private topicEndpoint: string,
+        private accessKey: string,
+        private clientId: string
+    ) {
+        this.publisher = new EventGridPublisherClient(
+            topicEndpoint,
+            new AzureKeyCredential(accessKey)
+        );
+    }
+
+    async sendMessage(message: McpMessage): Promise<void> {
+        const event = {
+            id:     crypto.randomUUID(),
+            source: `mcp-client-${this.clientId}`,
+            type:   "MCP.MessageReceived",
+            time:   new Date(),
+            data:   message
+        };
+        await this.publisher.sendEvents([event]);
+    }
+}
+
+// Azure Functions handler
+app.eventGrid("mcpEventGridHandler", {
+    handler: async (event: EventGridEvent, context: InvocationContext) => {
+        const mcpMessage = event.data as McpMessage;
+        const response = await mcpServer.processMessage(mcpMessage);
+        await transport.sendMessage(response);
+    }
+});
+```
+
+```python Python
+from azure.eventgrid import EventGridPublisherClient, EventGridEvent
+from azure.core.credentials import AzureKeyCredential
+import json, uuid
+
+class EventGridMcpTransport:
+    def __init__(self, topic_endpoint: str, access_key: str, client_id: str):
+        self.client    = EventGridPublisherClient(
+            topic_endpoint, AzureKeyCredential(access_key))
+        self.client_id = client_id
+
+    async def send_message(self, message: dict) -> None:
+        event = EventGridEvent(
+            data         = message,
+            subject      = f"mcp/{self.client_id}",
+            event_type   = "MCP.MessageReceived",
+            data_version = "1.0"
+        )
+        await self.client.send(event)
+
+# Azure Functions trigger
+import azure.functions as func
+
+def main(event: func.EventGridEvent) -> None:
+    mcp_message = json.loads(event.get_body().decode('utf-8'))
+    response = process_mcp_message(mcp_message)
+    # Send response via new EventGridMcpTransport instance
+```
+</CodeGroup>
+
+## Azure Event Hubs transport
+
+Event Hubs provides high-throughput, low-latency streaming — ideal for scenarios with many concurrent MCP sessions.
+
+<CodeGroup>
+```csharp C#
+using Azure.Messaging.EventHubs;
+using Azure.Messaging.EventHubs.Producer;
+using Azure.Messaging.EventHubs.Consumer;
+
+public class EventHubsMcpTransport : IMcpTransport, IDisposable
+{
+    private readonly EventHubProducerClient _producer;
+    private readonly EventHubConsumerClient _consumer;
+
+    public EventHubsMcpTransport(
+        string connectionString,
+        string eventHubName,
+        string consumerGroup = "$Default")
+    {
+        _producer = new EventHubProducerClient(connectionString, eventHubName);
+        _consumer = new EventHubConsumerClient(
+            consumerGroup, connectionString, eventHubName);
+    }
+
+    public async Task SendMessageAsync(McpMessage message)
+    {
+        var messageBody = JsonSerializer.Serialize(message);
+        var eventData   = new EventData(Encoding.UTF8.GetBytes(messageBody));
+
+        eventData.Properties.Add("MessageType", message.Method ?? "response");
+        eventData.Properties.Add("MessageId",   message.Id);
+        eventData.Properties.Add("Timestamp",   DateTimeOffset.UtcNow);
+
+        await _producer.SendAsync(new[] { eventData });
+    }
+
+    public async Task StartReceivingAsync(Func<McpMessage, Task> messageHandler)
+    {
+        await foreach (PartitionEvent partitionEvent in
+            _consumer.ReadEventsAsync(_cancellationTokenSource.Token))
+        {
+            var messageBody = Encoding.UTF8.GetString(
+                partitionEvent.Data.EventBody.ToArray());
+            var mcpMessage = JsonSerializer.Deserialize<McpMessage>(messageBody);
+            await messageHandler(mcpMessage);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cancellationTokenSource?.Cancel();
+        _producer?.DisposeAsync().AsTask().Wait();
+        _consumer?.DisposeAsync().AsTask().Wait();
+    }
+}
+```
+
+```typescript TypeScript
+import {
+    EventHubProducerClient,
+    EventHubConsumerClient,
+    EventData
+} from "@azure/event-hubs";
+
+export class EventHubsMcpTransport implements McpTransport {
+    private producer: EventHubProducerClient;
+    private consumer: EventHubConsumerClient;
+
+    constructor(
+        private connectionString: string,
+        private eventHubName: string,
+        private consumerGroup: string = "$Default"
+    ) {
+        this.producer = new EventHubProducerClient(connectionString, eventHubName);
+        this.consumer = new EventHubConsumerClient(
+            consumerGroup, connectionString, eventHubName);
+    }
+
+    async sendMessage(message: McpMessage): Promise<void> {
+        const eventData: EventData = {
+            body: JSON.stringify(message),
+            properties: {
+                messageType: message.method || "response",
+                messageId:   message.id,
+                timestamp:   new Date().toISOString()
+            }
+        };
+        await this.producer.sendBatch([eventData]);
+    }
+
+    async startReceiving(
+        messageHandler: (message: McpMessage) => Promise<void>
+    ): Promise<void> {
+        this.consumer.subscribe({
+            processEvents: async (events, context) => {
+                for (const event of events) {
+                    const mcpMessage: McpMessage = JSON.parse(event.body as string);
+                    await messageHandler(mcpMessage);
+                    await context.updateCheckpoint(event); // at-least-once delivery
+                }
+            },
+            processError: async (err) => {
+                console.error("Event Hubs error:", err);
+            }
+        });
+    }
+}
+```
+
+```python Python
+from azure.eventhub import EventHubProducerClient, EventHubConsumerClient, EventData
+import json, asyncio
+from typing import Callable, Dict, Any
+
+class EventHubsMcpTransport:
+    def __init__(self, connection_string: str, eventhub_name: str,
+                 consumer_group: str = "$Default"):
+        self.producer = EventHubProducerClient.from_connection_string(
+            connection_string, eventhub_name=eventhub_name)
+        self.consumer = EventHubConsumerClient.from_connection_string(
+            connection_string, consumer_group=consumer_group,
+            eventhub_name=eventhub_name)
+
+    async def send_message(self, message: Dict[str, Any]) -> None:
+        event_data = EventData(json.dumps(message))
+        event_data.properties = {
+            "messageType": message.get("method", "response"),
+            "messageId":   message.get("id"),
+        }
+        async with self.producer:
+            batch = await self.producer.create_batch()
+            batch.add(event_data)
+            await self.producer.send_batch(batch)
+
+    async def start_receiving(self, message_handler: Callable) -> None:
+        async with self.consumer:
+            await self.consumer.receive(
+                on_event=self._make_handler(message_handler),
+                starting_position="-1"
+            )
+
+    def _make_handler(self, handler: Callable):
+        async def handle_event(partition_context, event):
+            mcp_message = json.loads(event.body_as_str(encoding='UTF-8'))
+            await handler(mcp_message)
+            await partition_context.update_checkpoint(event)
+        return handle_event
+```
+</CodeGroup>
+
+## Advanced patterns
+
+### Message batching for throughput
+
+```csharp
+public class BatchingEventGridTransport : IMcpTransport
+{
+    private readonly List<McpMessage> _messageBuffer = new();
+    private const int MaxBatchSize = 100;
+
+    public async Task SendMessageAsync(McpMessage message)
+    {
+        lock (_messageBuffer)
+        {
+            _messageBuffer.Add(message);
+            if (_messageBuffer.Count >= MaxBatchSize)
+                _ = Task.Run(FlushMessages);
+        }
+    }
+
+    private async Task FlushMessages()
+    {
+        List<McpMessage> toSend;
+        lock (_messageBuffer)
+        {
+            toSend = new List<McpMessage>(_messageBuffer);
+            _messageBuffer.Clear();
+        }
+        if (toSend.Any())
+        {
+            var events = toSend.Select(CreateEventGridEvent);
+            await _publisher.SendEventsAsync(events);
+        }
+    }
+}
+```
+
+### Hybrid transport routing
+
+```csharp
+public class HybridMcpTransport : IMcpTransport
+{
+    private readonly IMcpTransport _realtimeTransport; // Event Hubs
+    private readonly IMcpTransport _batchTransport;    // Event Grid
+    private readonly IMcpTransport _fallbackTransport; // HTTP Streaming
+
+    public async Task SendMessageAsync(McpMessage message)
+    {
+        var transport = message.Method switch
+        {
+            "tools/call" when IsRealtime(message) => _realtimeTransport,
+            "resources/read" when IsBatch(message) => _batchTransport,
+            _ => _fallbackTransport
+        };
+        await transport.SendMessageAsync(message);
+    }
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use managed identity" icon="id-card">
+    Avoid connection strings in production. Use `DefaultAzureCredential` for authentication.
+  </Card>
+  <Card title="Implement idempotency" icon="clone">
+    Message processing must be idempotent to safely handle Event Hubs at-least-once delivery.
+  </Card>
+  <Card title="Add dead-letter queues" icon="inbox">
+    Configure dead-letter topics for messages that fail processing to prevent data loss.
+  </Card>
+  <Card title="Monitor with Application Insights" icon="chart-bar">
+    Add telemetry to all send/receive paths to track latency, throughput, and errors.
+  </Card>
+</CardGroup>

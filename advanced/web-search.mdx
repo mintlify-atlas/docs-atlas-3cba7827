@@ -1,0 +1,276 @@
+---
+title: "Web Search MCP Server"
+description: "Build a production-ready web search MCP server using SerpAPI — with multi-tool orchestration, external API authentication, structured data parsing, and robust error handling."
+---
+
+## Overview
+
+This lesson demonstrates how to build a real-world AI agent that integrates with external APIs, handles diverse data types, manages errors, and orchestrates multiple tools. You will build a complete web search MCP server and client using SerpAPI.
+
+<CardGroup cols={2}>
+  <Card title="general_search" icon="magnifying-glass">
+    Broad web results across all domains
+  </Card>
+  <Card title="news_search" icon="newspaper">
+    Recent headlines and news articles
+  </Card>
+  <Card title="product_search" icon="shopping-cart">
+    E-commerce product data
+  </Card>
+  <Card title="qna" icon="circle-question">
+    Direct question-and-answer snippets
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- Python 3.8 or higher
+- A SerpAPI API key (sign up at [serpapi.com](https://serpapi.com/) — free tier available)
+
+## Setup
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    # Using uv (recommended)
+    uv pip install -r requirements.txt
+
+    # Or using pip
+    pip install -r requirements.txt
+    ```
+  </Step>
+  <Step title="Configure API key">
+    Create a `.env` file in your project root:
+
+    ```bash
+    SERPAPI_KEY=your_serpapi_key_here
+    ```
+  </Step>
+  <Step title="Start the server">
+    ```bash
+    python server.py
+    ```
+  </Step>
+  <Step title="Run the client">
+    ```bash
+    # Automated tests
+    python client.py
+
+    # Interactive mode
+    python client.py --interactive
+    ```
+  </Step>
+</Steps>
+
+## Server implementation
+
+The server registers four tools and handles all requests from the MCP client.
+
+```python
+# server.py (excerpt)
+from mcp.server import MCPServer, Tool
+
+async def general_search(query: str):
+    # SerpAPI call, response parsing, error handling
+    ...
+
+server = MCPServer()
+server.add_tool(Tool("general_search", general_search))
+
+if __name__ == "__main__":
+    server.run()
+```
+
+## Tool reference
+
+### general_search
+
+Performs a general web search and returns formatted results.
+
+**Parameters:**
+- `query` (string, required): The search query
+
+**Example call:**
+
+```python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+async def run_general_search():
+    server_params = StdioServerParameters(
+        command="python",
+        args=["server.py"],
+    )
+    async with stdio_client(server_params) as (reader, writer):
+        async with ClientSession(reader, writer) as session:
+            await session.initialize()
+            result = await session.call_tool(
+                "general_search",
+                arguments={"query": "latest AI trends"}
+            )
+            print(result)
+```
+
+**Example request:**
+```json
+{"query": "latest AI trends"}
+```
+
+---
+
+### news_search
+
+Searches for recent news articles.
+
+**Parameters:**
+- `query` (string, required): The search query
+
+**Example call:**
+
+```python
+result = await session.call_tool(
+    "news_search",
+    arguments={"query": "AI policy updates"}
+)
+```
+
+**Example request:**
+```json
+{"query": "AI policy updates"}
+```
+
+---
+
+### product_search
+
+Searches for products matching a query.
+
+**Parameters:**
+- `query` (string, required): The product search query
+
+**Example call:**
+
+```python
+result = await session.call_tool(
+    "product_search",
+    arguments={"query": "best AI gadgets 2025"}
+)
+```
+
+**Example request:**
+```json
+{"query": "best AI gadgets 2025"}
+```
+
+---
+
+### qna
+
+Gets a direct answer to a question from search engine results.
+
+**Parameters:**
+- `question` (string, required): The question to find an answer for
+
+**Example call:**
+
+```python
+result = await session.call_tool(
+    "qna",
+    arguments={"question": "what is artificial intelligence"}
+)
+```
+
+**Example request:**
+```json
+{"question": "what is artificial intelligence"}
+```
+
+## Writing a custom test script
+
+```python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+async def test_custom_query():
+    server_params = StdioServerParameters(
+        command="python",
+        args=["server.py"],
+    )
+
+    async with stdio_client(server_params) as (reader, writer):
+        async with ClientSession(reader, writer) as session:
+            await session.initialize()
+
+            result = await session.call_tool(
+                "general_search",
+                arguments={"query": "your custom query"}
+            )
+            print(result)
+```
+
+## Advanced concepts
+
+<AccordionGroup>
+  <Accordion title="Multi-tool orchestration">
+    Running multiple tools (web search, news search, product search, Q&A) within a single MCP server allows the AI to handle a variety of tasks in one interaction.
+  </Accordion>
+  <Accordion title="API rate limit handling">
+    External APIs limit request frequency. Implement exponential backoff and quota checks so your app degrades gracefully rather than crashing.
+  </Accordion>
+  <Accordion title="Structured data parsing">
+    SerpAPI responses are deeply nested. Flatten them into clean, consistent structures before returning to the AI model.
+  </Accordion>
+  <Accordion title="Error recovery">
+    Network failures and API errors should produce useful messages rather than stack traces. Wrap all external calls in try/except with specific error types.
+  </Accordion>
+  <Accordion title="Parameter validation">
+    Validate all tool inputs before making API calls. Set sensible defaults and ensure required fields are present.
+  </Accordion>
+</AccordionGroup>
+
+## Debugging
+
+Enable DEBUG logging to see detailed HTTP request/response traces:
+
+```python
+# At the top of client.py or server.py
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Change from INFO to DEBUG
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+```
+
+**Normal output:**
+```
+2025-06-01 10:15:23 - INFO - Calling general_search: {'query': 'open source LLMs'}
+2025-06-01 10:15:24 - INFO - Successfully called general_search
+
+GENERAL_SEARCH RESULTS:
+...
+```
+
+**Debug output:**
+```
+2025-06-01 10:15:23 - INFO  - Calling general_search: {'query': 'open source LLMs'}
+2025-06-01 10:15:23 - DEBUG - HTTP Request: GET https://serpapi.com/search ...
+2025-06-01 10:15:23 - DEBUG - HTTP Response: 200 OK ...
+2025-06-01 10:15:24 - INFO  - Successfully called general_search
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="SERPAPI_KEY environment variable not found">
+    Create a `.env` file in your project root and add `SERPAPI_KEY=your_key_here`. Make sure `python-dotenv` or a similar package loads it at startup.
+  </Accordion>
+  <Accordion title="ModuleNotFoundError">
+    Run `pip install -r requirements.txt` to install all required packages. Common missing modules: `httpx`, `mcp`, `python-dotenv`.
+  </Accordion>
+  <Accordion title="Error during client execution">
+    Verify `server.py` is running before starting the client. Check that both are using compatible MCP SDK versions.
+  </Accordion>
+  <Accordion title="Search API returned error status: 401">
+    Your SerpAPI key is missing, incorrect, or expired. Verify the key in your SerpAPI dashboard and update your `.env` file. Check if your free-tier quota is exhausted.
+  </Accordion>
+</AccordionGroup>

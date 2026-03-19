@@ -1,0 +1,426 @@
+---
+title: "Building Your First MCP Server"
+description: "Create a calculator MCP server in TypeScript, Python, .NET, Java, or Rust, then inspect and test it with the MCP Inspector."
+---
+
+An MCP server exposes capabilities — tools, resources, and prompts — that any compliant client or AI model can discover and use. In this lesson you build a simple calculator server and verify it works using the MCP Inspector.
+
+<Info>
+If you build AI apps, you know that you can add tools and other resources to your LLM to make it more knowledgeable. When you place those tools on a server, any client — with or without an LLM — can use them.
+</Info>
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Set up an MCP development environment in your chosen language
+- Build a basic MCP server that exposes tools and resources
+- Inspect and test your server using the MCP Inspector
+- Understand the three MCP server primitives: tools, resources, and prompts
+
+## What an MCP server can do
+
+An MCP server can:
+
+- Access local files and databases
+- Connect to remote APIs
+- Perform computations
+- Integrate with other tools and services
+- Expose user-facing prompts
+
+## Basic server structure
+
+Every MCP server has the same three building blocks:
+
+| Primitive | Purpose | Example |
+|-----------|---------|----------|
+| **Tools** | Functions the LLM can call | `add(a, b)` |
+| **Resources** | Data the LLM can read | `file://{path}` |
+| **Prompts** | Reusable message templates | `review-code` |
+
+## Exercise: Creating a server
+
+<Steps>
+  <Step title="Create the project">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```bash
+        mkdir calculator-server
+        cd calculator-server
+        npm init -y
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```bash
+        mkdir calculator-server
+        cd calculator-server
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```bash
+        dotnet new console -n McpCalculatorServer
+        cd McpCalculatorServer
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        curl https://start.spring.io/starter.zip \
+          -d dependencies=web \
+          -d javaVersion=21 \
+          -d type=maven-project \
+          -d groupId=com.example \
+          -d artifactId=calculator-server \
+          -d name=McpServer \
+          -d packageName=com.microsoft.mcp.sample.server \
+          -o calculator-server.zip
+        unzip calculator-server.zip -d calculator-server
+        cd calculator-server
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```bash
+        mkdir calculator-server
+        cd calculator-server
+        cargo init
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Install dependencies">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```bash
+        npm install @modelcontextprotocol/sdk zod
+        npm install -D @types/node typescript
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```bash
+        python -m venv venv
+        venv/bin/activate   # or venv\Scripts\activate on Windows
+        pip install "mcp[cli]"
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```bash
+        dotnet add package ModelContextProtocol --prerelease
+        dotnet add package Microsoft.Extensions.Hosting
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        ./mvnw clean install -DskipTests
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```bash
+        cargo add rmcp --features server,transport-io
+        cargo add serde
+        cargo add tokio --features rt-multi-thread
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Write the server code">
+    <Tabs>
+      <Tab title="TypeScript">
+        Create `src/index.ts`:
+
+        ```typescript
+        import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+        import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+        import { z } from "zod";
+
+        const server = new McpServer({
+          name: "Calculator MCP Server",
+          version: "1.0.0"
+        });
+
+        // Add an addition tool
+        server.tool(
+          "add",
+          { a: z.number(), b: z.number() },
+          async ({ a, b }) => ({
+            content: [{ type: "text", text: String(a + b) }]
+          })
+        );
+
+        // Add a dynamic greeting resource
+        server.resource(
+          "greeting",
+          new ResourceTemplate("greeting://{name}", { list: undefined }),
+          async (uri, { name }) => ({
+            contents: [{ uri: uri.href, text: `Hello, ${name}!` }]
+          })
+        );
+
+        // Add a code review prompt
+        server.prompt(
+          "review-code",
+          { code: z.string() },
+          ({ code }) => ({
+            messages: [{
+              role: "user",
+              content: { type: "text", text: `Please review this code:\n\n${code}` }
+            }]
+          })
+        );
+
+        const transport = new StdioServerTransport();
+        server.connect(transport);
+        ```
+      </Tab>
+      <Tab title="Python">
+        Create `server.py`:
+
+        ```python
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("Calculator MCP Server")
+
+        @mcp.tool()
+        def add(a: float, b: float) -> float:
+            """Add two numbers together and return the result."""
+            return a + b
+
+        @mcp.tool()
+        def subtract(a: float, b: float) -> float:
+            """Subtract b from a and return the result."""
+            return a - b
+
+        @mcp.tool()
+        def multiply(a: float, b: float) -> float:
+            """Multiply two numbers together and return the result."""
+            return a * b
+
+        @mcp.tool()
+        def divide(a: float, b: float) -> float:
+            """Divide a by b. Raises ValueError if b is zero."""
+            if b == 0:
+                raise ValueError("Cannot divide by zero")
+            return a / b
+
+        @mcp.resource("greeting://{name}")
+        def get_greeting(name: str) -> str:
+            """Get a personalized greeting"""
+            return f"Hello, {name}!"
+
+        if __name__ == "__main__":
+            mcp.run()
+        ```
+      </Tab>
+      <Tab title=".NET">
+        Replace `Program.cs`:
+
+        ```csharp
+        using Microsoft.Extensions.DependencyInjection;
+        using Microsoft.Extensions.Hosting;
+        using Microsoft.Extensions.Logging;
+        using ModelContextProtocol.Server;
+        using System.ComponentModel;
+
+        var builder = Host.CreateApplicationBuilder(args);
+        builder.Logging.AddConsole(consoleLogOptions =>
+        {
+            consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+        });
+
+        builder.Services
+            .AddMcpServer()
+            .WithStdioServerTransport()
+            .WithToolsFromAssembly();
+        await builder.Build().RunAsync();
+
+        [McpServerToolType]
+        public static class CalculatorTool
+        {
+            [McpServerTool, Description("Adds two numbers")]
+            public static string Add(int a, int b) => $"Sum {a + b}";
+        }
+        ```
+      </Tab>
+      <Tab title="Java">
+        `McpServerApplication.java`:
+
+        ```java
+        @SpringBootApplication
+        public class McpServerApplication {
+            public static void main(String[] args) {
+                SpringApplication.run(McpServerApplication.class, args);
+            }
+
+            @Bean
+            public ToolCallbackProvider calculatorTools(CalculatorService calculator) {
+                return MethodToolCallbackProvider.builder().toolObjects(calculator).build();
+            }
+        }
+        ```
+
+        `CalculatorService.java`:
+
+        ```java
+        @Service
+        public class CalculatorService {
+            @Tool(description = "Add two numbers together")
+            public String add(double a, double b) {
+                return String.format("%.2f + %.2f = %.2f", a, b, a + b);
+            }
+
+            @Tool(description = "Divide the first number by the second number")
+            public String divide(double a, double b) {
+                if (b == 0) return "Error: Cannot divide by zero";
+                return String.format("%.2f / %.2f = %.2f", a, b, a / b);
+            }
+        }
+        ```
+      </Tab>
+      <Tab title="Rust">
+        `src/main.rs`:
+
+        ```rust
+        use rmcp::{
+            ServerHandler, ServiceExt,
+            handler::server::{router::tool::ToolRouter, tool::Parameters},
+            model::{ServerCapabilities, ServerInfo},
+            schemars, tool, tool_handler, tool_router,
+            transport::stdio,
+        };
+        use std::error::Error;
+
+        #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+        pub struct CalculatorRequest { pub a: f64, pub b: f64 }
+
+        #[derive(Debug, Clone)]
+        pub struct Calculator { tool_router: ToolRouter<Self> }
+
+        #[tool_router]
+        impl Calculator {
+            pub fn new() -> Self {
+                Self { tool_router: Self::tool_router() }
+            }
+
+            #[tool(description = "Adds a and b")]
+            async fn add(
+                &self,
+                Parameters(CalculatorRequest { a, b }): Parameters<CalculatorRequest>,
+            ) -> String {
+                (a + b).to_string()
+            }
+        }
+
+        #[tool_handler]
+        impl ServerHandler for Calculator {
+            fn get_info(&self) -> ServerInfo {
+                ServerInfo {
+                    instructions: Some("A simple calculator tool".into()),
+                    capabilities: ServerCapabilities::builder().enable_tools().build(),
+                    ..Default::default()
+                }
+            }
+        }
+
+        #[tokio::main]
+        async fn main() -> Result<(), Box<dyn Error>> {
+            let service = Calculator::new().serve(stdio()).await?;
+            service.waiting().await?;
+            Ok(())
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Build and run">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```bash
+        npm run build
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```bash
+        mcp run server.py
+        ```
+        <Tip>Use `mcp dev server.py` to automatically launch the Inspector alongside your server.</Tip>
+      </Tab>
+      <Tab title=".NET">
+        ```bash
+        dotnet run
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        ./mvnw clean install -DskipTests
+        java -jar target/calculator-server-0.0.1-SNAPSHOT.jar
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```bash
+        cargo fmt
+        cargo run
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Run the MCP Inspector">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```bash
+        npx @modelcontextprotocol/inspector node build/index.js
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```bash
+        npx @modelcontextprotocol/inspector mcp run server.py
+        ```
+      </Tab>
+      <Tab title=".NET">
+        ```bash
+        npx @modelcontextprotocol/inspector dotnet run
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        npx @modelcontextprotocol/inspector
+        # Select SSE transport, URL: http://localhost:8080/sse
+        ```
+      </Tab>
+      <Tab title="Rust">
+        ```bash
+        npx @modelcontextprotocol/inspector --cli cargo run \
+          --method tools/call --tool-name add --tool-arg a=1 b=2
+        ```
+      </Tab>
+    </Tabs>
+
+    The Inspector opens a browser UI. Connect to your server, click **Tools → listTools**, select **add**, fill in two numbers, and run it. You should see the result returned immediately.
+  </Step>
+</Steps>
+
+## Common setup issues
+
+| Issue | Solution |
+|-------|----------|
+| Connection refused | Check that the server is running and the port is correct |
+| Tool execution errors | Review parameter validation and error handling |
+| Authentication failures | Verify API keys and permissions |
+| Schema validation errors | Ensure parameters match the defined schema |
+| Server not starting | Check for port conflicts or missing dependencies |
+
+## Assignment
+
+Create a simple MCP server with a tool of your choice:
+
+1. Implement the tool in your preferred language.
+2. Define input parameters and return values.
+3. Run the Inspector tool to ensure the server works as intended.
+4. Test the implementation with various inputs.
+
+## Key takeaways
+
+- Setting up an MCP development environment is straightforward with language-specific SDKs.
+- Building MCP servers involves creating and registering tools with clear schemas.
+- Use the MCP Inspector to discover capabilities and test tool execution interactively.

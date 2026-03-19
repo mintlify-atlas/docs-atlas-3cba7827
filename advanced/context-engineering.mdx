@@ -1,0 +1,250 @@
+---
+title: "Context Engineering"
+description: "Explore the emerging discipline of context engineering — deliberate design and management of information flow in MCP systems to improve AI model performance, efficiency, and reliability."
+---
+
+## Overview
+
+Context engineering is an emerging concept focused on the deliberate design and management of information flow between users, applications, and AI models. Unlike established fields such as prompt engineering, context engineering is still being defined by practitioners as they work to solve the unique challenges of providing AI models with the right information at the right time.
+
+> "In 2025, the models out there are extremely intelligent. But even the smartest human won't be able to do their job effectively without the context of what they're being asked to do... 'Context engineering' is the next level of prompt engineering. It is about doing this automatically in a dynamic system."
+> — Walden Yan, Cognition AI
+
+## The context journey
+
+Information flows through five stages in a typical MCP system:
+
+```
+User Input ──► Context Assembly ──► Model Processing
+                                          │
+                                   Response Generation
+                                          │
+                                   State Management
+                                          │
+                              ◄─── Next Interaction
+```
+
+| Stage | Description |
+|-------|-------------|
+| User input | Raw information from the user (text, images, documents) |
+| Context assembly | Combining user input with system context, history, and retrieved information |
+| Model processing | The AI model processes the assembled context |
+| Response generation | The model produces outputs based on the provided context |
+| State management | The system updates its internal state based on the interaction |
+
+## Core areas of context engineering
+
+Context engineering encompasses five areas particularly relevant to MCP:
+
+<CardGroup cols={2}>
+  <Card title="Context selection" icon="filter">
+    Determining what information is relevant for a given task
+  </Card>
+  <Card title="Context structuring" icon="layer-group">
+    Organizing information to maximize model comprehension
+  </Card>
+  <Card title="Context delivery" icon="paper-plane">
+    Optimizing how and when information is sent to models
+  </Card>
+  <Card title="Context maintenance" icon="database">
+    Managing state and evolution of context over time
+  </Card>
+  <Card title="Context evaluation" icon="chart-bar">
+    Measuring and improving the effectiveness of context
+  </Card>
+</CardGroup>
+
+## Emerging principles
+
+### Principle 1: Share context completely
+
+Context should be shared completely between all components rather than fragmented across multiple agents or processes.
+
+```
+Fragmented approach (problematic):
+  Agent 1 ── Context 1
+  Agent 2 ── Context 2
+  Agent 3 ── Context 3
+  (decisions may conflict)
+
+Unified approach (preferred):
+  Agent ── Shared Complete Context
+  (consistent decisions throughout)
+```
+
+In MCP applications, this suggests designing systems where context flows seamlessly through the entire pipeline.
+
+### Principle 2: Actions carry implicit decisions
+
+Each action a model takes embodies implicit decisions about how to interpret context. When multiple components act on different contexts, these decisions can conflict.
+
+Practical implications:
+- Prefer linear processing of complex tasks over parallel execution with fragmented context
+- Ensure all decision points have access to the same contextual information
+- Design systems where later steps can see the full context of earlier decisions
+
+### Principle 3: Balance context depth with window limitations
+
+As conversations grow longer, context windows eventually overflow. Effective context engineering manages the tension between comprehensive context and technical limitations.
+
+## Emerging approaches
+
+### 1. Context chunking and prioritization
+
+```python
+# Conceptual: Context chunking and prioritization
+def process_with_chunked_context(documents, query):
+    # 1. Break documents into smaller chunks
+    chunks = chunk_documents(documents)
+
+    # 2. Score each chunk for relevance
+    scored_chunks = [
+        (chunk, calculate_relevance(chunk, query))
+        for chunk in chunks
+    ]
+
+    # 3. Sort by relevance descending
+    sorted_chunks = sorted(scored_chunks, key=lambda x: x[1], reverse=True)
+
+    # 4. Use the top N most relevant chunks
+    context = create_context_from_chunks(
+        [chunk for chunk, score in sorted_chunks[:5]]
+    )
+
+    # 5. Process with prioritized context
+    return generate_response(context, query)
+```
+
+This approach works within context window limitations while still leveraging large knowledge bases.
+
+### 2. Progressive context loading
+
+```
+User asks question
+      │
+      ▼
+MCP Server sends minimal context to AI Model
+      │
+      ▼
+AI Model produces initial response
+      │
+      ▼
+Does model need more context?
+  ├── Yes: Load additional context → re-query model
+  └── No:  Return final response to user
+```
+
+Progressive loading starts with minimal context and expands only when necessary — reducing token usage for simple queries while handling complex questions fully.
+
+### 3. Context compression and summarization
+
+```
+Full Conversation Context
+        │
+        ▼
+Compression Model
+        │
+  Compressed Context (essential info only)
+        │
+        ▼
+Main Processing Model ──► Response
+```
+
+Context compression focuses on:
+- Removing redundant information
+- Summarizing lengthy exchanges
+- Extracting key facts and decisions
+- Optimizing for token efficiency
+
+### 4. Layered context architecture
+
+Some practitioners find success with context arranged in conceptual layers:
+
+| Layer | Content |
+|-------|---------|
+| Core layer | Essential information the model always needs |
+| Situational layer | Context specific to the current interaction |
+| Supporting layer | Additional information that may be helpful |
+| Fallback layer | Information accessed only when needed |
+
+## MCP protocol design responses
+
+The MCP protocol was designed with context challenges in mind:
+
+<AccordionGroup>
+  <Accordion title="Context window limitations">
+    The protocol supports structured, resource-based context that can be referenced efficiently. Resources can be paginated and loaded progressively.
+  </Accordion>
+  <Accordion title="Relevance determination">
+    Flexible tooling allows dynamic retrieval of information based on need. Structured prompts enable consistent context organization.
+  </Accordion>
+  <Accordion title="Context persistence">
+    Standardized session management and clearly defined interaction patterns for context evolution.
+  </Accordion>
+  <Accordion title="Multi-modal context">
+    Protocol design accommodates various content types with standardized representation of multi-modal information.
+  </Accordion>
+  <Accordion title="Security and privacy">
+    Clear boundaries between client and server responsibilities, with local processing options to minimize data exposure.
+  </Accordion>
+</AccordionGroup>
+
+## Multi-agent architecture tradeoffs
+
+<Warning>
+  While multi-agent architectures are popular, they come with significant context engineering challenges. Consider whether a single-agent approach with comprehensive context management might produce more reliable results for your use case.
+</Warning>
+
+| Concern | Multi-agent | Single-agent |
+|---------|------------|--------------|
+| Context fragmentation | High risk | Low risk |
+| Decision consistency | Requires coordination | Naturally consistent |
+| Communication overhead | High | None |
+| State management complexity | High | Lower |
+| Debugging difficulty | Complex | Simpler |
+
+## Measuring context effectiveness
+
+Context engineering is still maturing, but several metrics are emerging:
+
+<CardGroup cols={2}>
+  <Card title="Input efficiency" icon="compress">
+    Context-to-response ratio, token utilization, compression effectiveness
+  </Card>
+  <Card title="Performance" icon="bolt">
+    Latency impact, token economy, retrieval precision
+  </Card>
+  <Card title="Quality" icon="star">
+    Response relevance, factual accuracy, consistency, hallucination rate
+  </Card>
+  <Card title="User experience" icon="user">
+    Follow-up rate, task completion, satisfaction indicators
+  </Card>
+</CardGroup>
+
+## Experimental approach
+
+Context engineering is still in its early stages. Recommended approach:
+
+1. **Establish a baseline** with simple context before testing sophisticated methods
+2. **Change one thing at a time** to isolate the effect of each context change
+3. **Combine quantitative metrics** with qualitative user feedback
+4. **Analyze failures** to understand why context strategies fall short
+5. **Consider tradeoffs** between efficiency, quality, and user experience
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="MCP Documentation" icon="book" href="https://modelcontextprotocol.io/docs">
+    Official MCP specification and implementation guides
+  </Card>
+  <Card title="Don't Build Multi-Agents" icon="file-lines" href="https://cognition.ai/blog/dont-build-multi-agents">
+    Walden Yan's insights on context engineering principles
+  </Card>
+  <Card title="Building Effective Agents" icon="robot" href="https://www.anthropic.com/engineering/building-effective-agents">
+    Anthropic's approach to agent development
+  </Card>
+  <Card title="Lost in the Middle" icon="flask" href="https://arxiv.org/abs/2307.03172">
+    Research on how language models use long contexts
+  </Card>
+</CardGroup>

@@ -1,0 +1,408 @@
+---
+title: "Lab 9: VS Code Integration"
+description: "Configure VS Code MCP settings, use AI Chat for natural language retail queries, set up multi-server configurations, and troubleshoot MCP server connections."
+---
+
+## Objectives
+
+By the end of this lab you will be able to:
+
+- Configure VS Code MCP settings for your retail server
+- Integrate MCP servers with VS Code AI Chat functionality
+- Debug MCP server connections and troubleshoot issues
+- Optimize natural language query patterns for better results
+- Customize the VS Code workspace for MCP development
+- Deploy multi-server configurations for complex scenarios
+
+## Prerequisites
+
+- Completed [Lab 8: Testing & Debugging](/labs/08-testing)
+- MCP server running on `localhost:8000`
+- VS Code with the Python extension installed
+
+## Step 1: MCP server settings
+
+Create or update `.vscode/settings.json` in your project root:
+
+```json
+{
+    "mcp.servers": {
+        "retail-mcp-server": {
+            "command": "python",
+            "args": ["-m", "mcp_server.main"],
+            "env": {
+                "POSTGRES_HOST": "localhost",
+                "POSTGRES_PORT": "5432",
+                "POSTGRES_DB": "retail_db",
+                "POSTGRES_USER": "mcp_user",
+                "POSTGRES_PASSWORD": "${env:POSTGRES_PASSWORD}",
+                "PROJECT_ENDPOINT": "${env:PROJECT_ENDPOINT}",
+                "AZURE_CLIENT_ID": "${env:AZURE_CLIENT_ID}",
+                "AZURE_CLIENT_SECRET": "${env:AZURE_CLIENT_SECRET}",
+                "AZURE_TENANT_ID": "${env:AZURE_TENANT_ID}",
+                "LOG_LEVEL": "INFO"
+            },
+            "cwd": "${workspaceFolder}",
+            "initializationOptions": {
+                "store_id": "seattle",
+                "enable_semantic_search": true,
+                "enable_analytics": true,
+                "cache_embeddings": true
+            }
+        }
+    },
+    "mcp.serverTimeout": 30000,
+    "mcp.enableLogging": true,
+    "mcp.logLevel": "info",
+    "python.defaultInterpreterPath": "./mcp-env/bin/python",
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["tests"]
+}
+```
+
+<Note>
+  The `${env:VARIABLE_NAME}` syntax reads from your shell environment, keeping secrets out of the settings file. Make sure your `.env` is sourced or the variables are set in your terminal before opening VS Code.
+</Note>
+
+## Step 2: HTTP mode configuration (direct server)
+
+If your MCP server is already running as an HTTP server, use `.vscode/mcp.json` instead:
+
+```json
+{
+    "servers": {
+        "zava-sales-analysis-headoffice": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "00000000-0000-0000-0000-000000000000"}
+        },
+        "zava-sales-analysis-seattle": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}
+        },
+        "zava-sales-analysis-redmond": {
+            "url": "http://127.0.0.1:8000/mcp",
+            "type": "http",
+            "headers": {"x-rls-user-id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234"}
+        }
+    },
+    "inputs": []
+}
+```
+
+<Tip>
+  The `x-rls-user-id` header determines which store's data is visible. Use the head office ID (`00000000...`) to see all stores, or a specific store manager ID to scope to that store.
+</Tip>
+
+## Step 3: Launch configuration for debugging
+
+Create `.vscode/launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug MCP Server",
+            "type": "python",
+            "request": "launch",
+            "module": "mcp_server.main",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "MCP_SERVER_DEBUG": "true",
+                "LOG_LEVEL": "DEBUG"
+            },
+            "justMyCode": false,
+            "stopOnEntry": false
+        },
+        {
+            "name": "Run Tests",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env.test",
+            "args": ["tests/", "-v", "--tb=short"]
+        }
+    ]
+}
+```
+
+## Step 4: Task automation
+
+Create `.vscode/tasks.json` for common operations:
+
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start MCP Server",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "mcp_server.main"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "new"
+            },
+            "isBackground": true,
+            "problemMatcher": {
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^.*Starting MCP server.*$",
+                    "endsPattern": "^.*MCP server ready.*$"
+                }
+            }
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "pytest", "tests/", "-v"],
+            "group": "test"
+        },
+        {
+            "label": "Generate Sample Data",
+            "type": "shell",
+            "command": "python",
+            "args": ["scripts/generate_sample_data.py"],
+            "group": "build"
+        }
+    ]
+}
+```
+
+## Step 5: Using AI Chat with MCP
+
+### Open AI Chat and connect to the server
+
+<Steps>
+  <Step title="Open AI Chat">
+    Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS) and type "AI Chat".
+  </Step>
+  <Step title="Select the MCP server">
+    In the Chat input, type `#zava` (or your configured server prefix) and select a server from the dropdown.
+  </Step>
+  <Step title="Verify the connection">
+    Ask: *"What tables are available in the database?"*
+
+    The AI should call `get_multiple_table_schemas` and return a list of retail tables.
+  </Step>
+</Steps>
+
+### Effective query patterns
+
+| Intent | Example query |
+|--------|--------------|
+| Sales analysis | "Show me daily sales for the last 30 days for Seattle store" |
+| Top products | "What are the top 10 selling products this month?" |
+| Customer analysis | "Which customers haven't purchased in 90 days?" |
+| Product search | "Find comfortable running shoes for outdoor activities" |
+| Inventory | "Which products are low on stock or need reordering?" |
+| Business summary | "Generate a comprehensive business summary for this month" |
+
+### Example AI Chat interactions
+
+```markdown
+User: Show me the top 10 selling products in the Seattle store for the last month
+
+Expected behavior:
+  1. AI calls get_multiple_table_schemas to understand the product/sales schema
+  2. AI calls execute_sales_query with query_type="top_products",
+     store_id="seattle", and appropriate date range
+  3. Returns a formatted table with product names, quantities, and revenue
+
+---
+
+User: Find comfortable running shoes for outdoor activities
+
+Expected behavior:
+  1. AI calls semantic_search_products with the natural language query
+  2. Returns ranked products with similarity scores
+  3. AI summarizes findings and suggests alternatives
+```
+
+## Step 6: Multi-server configuration
+
+For testing different store contexts simultaneously:
+
+```json
+{
+    "mcp.servers": {
+        "retail-seattle": {
+            "command": "python",
+            "args": ["-m", "mcp_server.main"],
+            "env": {
+                "POSTGRES_HOST": "localhost",
+                "POSTGRES_DB": "retail_db",
+                "DEFAULT_STORE_ID": "seattle"
+            },
+            "initializationOptions": {"store_id": "seattle", "server_name": "Seattle Store"}
+        },
+        "retail-redmond": {
+            "command": "python",
+            "args": ["-m", "mcp_server.main"],
+            "env": {
+                "POSTGRES_HOST": "localhost",
+                "POSTGRES_DB": "retail_db",
+                "DEFAULT_STORE_ID": "redmond"
+            },
+            "initializationOptions": {"store_id": "redmond", "server_name": "Redmond Store"}
+        },
+        "retail-analytics": {
+            "command": "python",
+            "args": ["-m", "mcp_server.analytics_main"],
+            "env": {
+                "POSTGRES_HOST": "localhost",
+                "POSTGRES_DB": "retail_db",
+                "POSTGRES_USER": "analytics_user"
+            },
+            "initializationOptions": {"mode": "analytics", "cross_store_access": true}
+        }
+    }
+}
+```
+
+## Troubleshooting MCP connections
+
+### Connection diagnostics script
+
+```python
+# scripts/debug_mcp_connection.py
+import asyncio
+import asyncpg
+import os
+
+async def test_database_connection():
+    params = {
+        'host': os.getenv('POSTGRES_HOST', 'localhost'),
+        'port': int(os.getenv('POSTGRES_PORT', '5432')),
+        'database': os.getenv('POSTGRES_DB', 'retail_db'),
+        'user': os.getenv('POSTGRES_USER', 'mcp_user'),
+        'password': os.getenv('POSTGRES_PASSWORD', '')
+    }
+    print(f"Testing connection to {params['host']}:{params['port']}")
+
+    conn = await asyncpg.connect(**params)
+    db_version = await conn.fetchval("SELECT version()")
+    tables = await conn.fetch(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'retail'"
+    )
+    await conn.close()
+
+    return {
+        'success': True,
+        'database_version': db_version,
+        'retail_table_count': len(tables),
+        'table_names': [t['table_name'] for t in tables]
+    }
+
+async def main():
+    print("MCP Server Connection Diagnostics")
+    print("=" * 50)
+
+    print("\nTesting Database Connection...")
+    db_result = await test_database_connection()
+
+    if db_result['success']:
+        print(f"Database: OK ({db_result['database_version'][:30]}...)")
+        print(f"Retail tables: {db_result['retail_table_count']}")
+    else:
+        print(f"Database: FAILED - {db_result.get('error')}")
+
+    # Test MCP server health
+    import aiohttp
+    print("\nTesting MCP Server...")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://localhost:8000/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    print(f"MCP Server: OK ({data.get('status')})")
+                else:
+                    print(f"MCP Server: HTTP {resp.status}")
+    except Exception as e:
+        print(f"MCP Server: FAILED - {e}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run it:
+
+```bash
+python scripts/debug_mcp_connection.py
+```
+
+### Common issues
+
+<AccordionGroup>
+  <Accordion title="AI Chat doesn't show the MCP server">
+    - Verify `.vscode/mcp.json` exists in the workspace root (not the project subfolder)
+    - Ensure the MCP server is running: `curl http://localhost:8000/health`
+    - Reload the VS Code window: `Ctrl+Shift+P` → "Developer: Reload Window"
+  </Accordion>
+  <Accordion title="Queries return empty results">
+    - Check the `x-rls-user-id` header in `.vscode/mcp.json` — it must match a valid store manager ID
+    - Verify sample data was loaded: `docker-compose exec postgres psql -U postgres -d zava -c "SELECT COUNT(*) FROM retail.customers;"`
+    - Confirm the store context function works: `SELECT retail.set_store_context('seattle');`
+  </Accordion>
+  <Accordion title="Tools not being called">
+    - Ask the AI explicitly to use a tool: *"Use the execute_sales_query tool to..."*
+    - Check that tool names in AI Chat match registered tool names in the server
+    - Review server logs: `docker-compose logs -f mcp_server`
+  </Accordion>
+  <Accordion title="Slow responses or timeouts">
+    - Increase `mcp.serverTimeout` in settings (default 30000ms)
+    - Check database query performance: `EXPLAIN ANALYZE SELECT ...`
+    - Verify connection pool is not exhausted: `curl http://localhost:8000/health/detailed`
+  </Accordion>
+</AccordionGroup>
+
+## Enhanced logging for VS Code debugging
+
+```python
+# mcp_server/debug/vscode_debug.py
+import logging
+import json
+
+class VSCodeDebugLogger:
+    """Enhanced logging for VS Code debugging."""
+
+    def __init__(self):
+        self.logger = logging.getLogger("mcp_vscode_debug")
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s'))
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.DEBUG)
+
+    def log_mcp_request(self, method: str, params: dict):
+        self.logger.info(f"MCP Request: {method}")
+        self.logger.debug(f"Parameters: {json.dumps(params, indent=2, default=str)}")
+
+    def log_tool_execution(self, tool_name: str, result: dict):
+        success = result.get('success', False)
+        level = logging.INFO if success else logging.ERROR
+        self.logger.log(level, f"Tool '{tool_name}' — {'Success' if success else 'Failed'}")
+        if not success:
+            self.logger.error(f"Error: {result.get('error')}")
+
+vscode_debug_logger = VSCodeDebugLogger()
+```
+
+## Key takeaways
+
+- **HTTP mode** (`.vscode/mcp.json`) is simpler for testing an already-running server
+- **Process mode** (`.vscode/settings.json`) lets VS Code start and manage the server lifecycle
+- **RLS user ID headers** control data visibility — use different IDs to test different store contexts
+- **Multi-server configs** let you compare data across stores in the same Chat session
+- **Diagnostic scripts** quickly verify database connectivity and tool availability
+- **AI Chat query patterns** work best when they include the store context and time range explicitly
+
+<Card title="Next: Lab 10 — Deployment Strategies" icon="arrow-right" href="/labs/10-deployment">
+  Deploy to production with Docker, Azure Container Apps, CI/CD pipelines, and auto-scaling.
+</Card>

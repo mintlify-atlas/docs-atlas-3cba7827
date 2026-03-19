@@ -1,0 +1,192 @@
+---
+title: "Module 10: AI Toolkit Workshop"
+description: "Four hands-on labs using Microsoft AI Toolkit for VS Code and MCP to build, debug, and deploy custom AI agents — from AI Toolkit fundamentals to a production-ready GitHub Clone MCP server."
+---
+
+This workshop combines two cutting-edge technologies to transform how you build AI applications:
+
+- **Model Context Protocol (MCP)** — an open standard for seamless AI-tool integration
+- **AI Toolkit for Visual Studio Code (AITK)** — Microsoft's powerful AI development extension
+
+By the end of the workshop, you'll have built production-ready MCP servers and integrated them with AI agents — all inside VS Code.
+
+## Technology stack
+
+<CardGroup cols={2}>
+  <Card title="Model Context Protocol" icon="plug">
+    MCP is the "USB-C for AI" — a universal standard connecting AI models to external tools and data sources. One protocol, infinite possibilities.
+
+    - Standardized integration via stdio and SSE transport
+    - Flexible local and remote server architectures
+    - Built-in security and reliability
+  </Card>
+  <Card title="AI Toolkit for VS Code" icon="code">
+    Microsoft's flagship AI development extension transforms VS Code into an AI development environment.
+
+    - Model Catalog with 100+ models from Azure AI, GitHub, Hugging Face, and Ollama
+    - Local inference with ONNX-optimized CPU/GPU/NPU execution
+    - Visual Agent Builder with MCP integration
+    - Real-time testing playground
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+| Component | Requirement | Notes |
+|-----------|-------------|-------|
+| **Operating System** | Windows 10+, macOS 10.15+, Linux | Any modern OS |
+| **Visual Studio Code** | Latest stable version | Required for AITK |
+| **Node.js** | v18.0+ and npm | For MCP server development |
+| **Python** | 3.10+ | Optional for Python MCP servers |
+| **Memory** | 8 GB RAM minimum | 16 GB recommended for local models |
+
+**Recommended VS Code extensions:**
+- AI Toolkit (`ms-windows-ai-studio.windows-ai-studio`)
+- Python (`ms-python.python`)
+- Python Debugger (`ms-python.debugpy`)
+- GitHub Copilot (`GitHub.copilot`) — optional but helpful
+
+**Optional tools:**
+- `uv` — modern Python package manager
+- MCP Inspector — visual debugging tool for MCP servers
+- Playwright — for web automation examples in Lab 2
+
+## Workshop labs
+
+<Steps>
+  <Step title="Lab 1: AI Toolkit Fundamentals (15 min)">
+    Install and configure AI Toolkit for VS Code, then build your first AI agent.
+
+    **What you'll do:**
+    - Install and configure AI Toolkit
+    - Explore the Model Catalog (100+ models from GitHub, ONNX, OpenAI, Anthropic, Google)
+    - Master the Interactive Playground for real-time model testing
+    - Build your first AI agent with Agent Builder
+    - Evaluate model performance with built-in metrics (F1, relevance, similarity, coherence)
+    - Learn batch processing and multi-modal support capabilities
+
+    **Learning outcome:** A functional AI agent with a comprehensive understanding of AITK capabilities.
+
+    [Start Lab 1](https://github.com/microsoft/mcp-for-beginners/tree/main/10-StreamliningAIWorkflowsBuildingAnMCPServerWithAIToolkit/lab1)
+  </Step>
+  <Step title="Lab 2: MCP with AI Toolkit Fundamentals (20 min)">
+    Connect MCP servers to AI Toolkit and build a browser automation agent.
+
+    **What you'll do:**
+    - Master MCP architecture and concepts
+    - Explore Microsoft's MCP server ecosystem
+    - Build a browser automation agent using the Playwright MCP server
+    - Integrate MCP servers with AI Toolkit Agent Builder
+    - Configure and test MCP tools within your agents
+    - Export and deploy MCP-powered agents for production use
+
+    **Learning outcome:** A deployed AI agent supercharged with external tools through MCP.
+
+    [Start Lab 2](https://github.com/microsoft/mcp-for-beginners/tree/main/10-StreamliningAIWorkflowsBuildingAnMCPServerWithAIToolkit/lab2)
+  </Step>
+  <Step title="Lab 3: Advanced MCP Development (20 min)">
+    Create custom MCP servers using AI Toolkit and the latest Python SDK.
+
+    **What you'll do:**
+    - Create custom MCP servers using AI Toolkit
+    - Configure and use the MCP Python SDK (v1.9.3)
+    - Set up and use MCP Inspector for debugging
+    - Build a Weather MCP Server with professional debugging workflows
+    - Debug MCP servers in both Agent Builder and Inspector environments
+
+    **Learning outcome:** Custom MCP servers you can develop and debug with modern tooling.
+
+    [Start Lab 3](https://github.com/microsoft/mcp-for-beginners/tree/main/10-StreamliningAIWorkflowsBuildingAnMCPServerWithAIToolkit/lab3)
+  </Step>
+  <Step title="Lab 4: Practical MCP Development — GitHub Clone Server (30 min)">
+    Build a real-world GitHub Clone MCP server for development workflows.
+
+    **What you'll do:**
+    - Build a production-ready GitHub Clone MCP server
+    - Implement smart repository cloning with validation and error handling
+    - Create intelligent directory management with VS Code integration
+    - Use GitHub Copilot Agent Mode with custom MCP tools
+    - Apply production-ready reliability and cross-platform compatibility
+
+    **Learning outcome:** A production-ready MCP server that streamlines real development workflows.
+
+    [Start Lab 4](https://github.com/microsoft/mcp-for-beginners/tree/main/10-StreamliningAIWorkflowsBuildingAnMCPServerWithAIToolkit/lab4)
+  </Step>
+</Steps>
+
+## Real-world applications
+
+The patterns you practice in these labs apply directly to enterprise use cases:
+
+<AccordionGroup>
+  <Accordion title="DevOps automation">
+    - **Smart repository management** — AI-driven code review and merge decisions
+    - **Intelligent CI/CD** — automated pipeline optimization based on code changes
+    - **Issue triage** — automatic bug classification and assignment
+  </Accordion>
+  <Accordion title="Quality assurance">
+    - **Intelligent test generation** — create comprehensive test suites automatically
+    - **Visual regression testing** — AI-powered UI change detection
+    - **Performance monitoring** — proactive issue identification and resolution
+  </Accordion>
+  <Accordion title="Data pipeline intelligence">
+    - **Adaptive ETL processes** — self-optimizing data transformations
+    - **Anomaly detection** — real-time data quality monitoring
+    - **Intelligent routing** — smart data flow management
+  </Accordion>
+  <Accordion title="Customer experience">
+    - **Context-aware support** — AI agents with access to full customer history
+    - **Proactive issue resolution** — predictive customer service
+    - **Multi-channel integration** — unified AI experience across platforms
+  </Accordion>
+</AccordionGroup>
+
+## Skill mastery checklist
+
+After completing all four labs, verify your skills:
+
+**Core competencies:**
+- [ ] MCP protocol architecture and implementation patterns
+- [ ] AI Toolkit proficiency for rapid development
+- [ ] Custom MCP server development, deployment, and maintenance
+- [ ] Tool integration — connecting AI with existing development workflows
+
+**Technical skills:**
+- [ ] Set up and configure AI Toolkit in VS Code
+- [ ] Design and implement custom MCP servers
+- [ ] Integrate GitHub Models with MCP architecture
+- [ ] Build automated testing workflows with Playwright
+- [ ] Deploy AI agents for production use
+- [ ] Debug and optimize MCP server performance
+
+**Advanced capabilities:**
+- [ ] Architect enterprise-scale AI integrations
+- [ ] Implement security best practices for AI applications
+- [ ] Design scalable MCP server architectures
+- [ ] Create custom tool chains for specific domains
+
+## Additional resources
+
+<CardGroup cols={2}>
+  <Card title="MCP Specification" icon="file-code" href="https://spec.modelcontextprotocol.io/specification/2025-11-25/">
+    Full protocol specification (2025-11-25)
+  </Card>
+  <Card title="AI Toolkit GitHub Repository" icon="github" href="https://github.com/microsoft/vscode-ai-toolkit">
+    Source code, issues, and samples for AITK
+  </Card>
+  <Card title="Sample MCP Servers" icon="server" href="https://github.com/modelcontextprotocol/servers">
+    Community-maintained MCP server collection
+  </Card>
+  <Card title="OWASP MCP Top 10" icon="shield" href="https://microsoft.github.io/mcp-azure-security-guide/mcp/">
+    Security best practices for MCP deployments
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Next: Hands-On Labs" icon="arrow-right" href="/labs/overview">
+    Continue to the 13-lab PostgreSQL integration capstone
+  </Card>
+  <Card title="Back: Case Studies" icon="arrow-left" href="/modules/09-case-study">
+    Review real-world MCP implementations
+  </Card>
+</CardGroup>

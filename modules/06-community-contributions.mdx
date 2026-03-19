@@ -1,0 +1,401 @@
+---
+title: "Module 6: Community Contributions"
+description: "Engage with the MCP community, contribute to open-source repositories, build shareable tools and servers, and follow best practices for collaborative MCP development."
+---
+
+The MCP ecosystem thrives because of contributors — developers who file bug reports, improve documentation, build custom servers, and share reusable tools with the community. This module explains how to participate effectively.
+
+## Learning objectives
+
+By the end of this module, you will be able to:
+
+- Understand the structure of the MCP community and ecosystem
+- Participate effectively in MCP community forums and discussions
+- Contribute to MCP open-source repositories
+- Create and share custom MCP tools and servers
+- Follow best practices for MCP development and collaboration
+
+## The MCP community ecosystem
+
+The MCP ecosystem is made up of five groups of participants:
+
+<CardGroup cols={2}>
+  <Card title="Core protocol maintainers" icon="code-branch">
+    The [Model Context Protocol GitHub organization](https://github.com/modelcontextprotocol) maintains the core specifications and reference implementations.
+  </Card>
+  <Card title="Tool developers" icon="wrench">
+    Individuals and teams that create MCP tools and servers for specific use cases.
+  </Card>
+  <Card title="Integration providers" icon="plug">
+    Companies that integrate MCP into their products — IDEs, AI assistants, enterprise platforms.
+  </Card>
+  <Card title="End users" icon="user">
+    Developers and organizations that consume MCP in their applications.
+  </Card>
+  <Card title="Contributors" icon="heart">
+    Community members who contribute code, documentation, translations, or other resources.
+  </Card>
+</CardGroup>
+
+### Community resources
+
+**Official channels:**
+- [MCP GitHub Organization](https://github.com/modelcontextprotocol)
+- [MCP Documentation](https://modelcontextprotocol.io/)
+- [MCP Specification](https://spec.modelcontextprotocol.io/specification/2025-11-25/)
+- [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- [MCP Examples & Servers Repository](https://github.com/modelcontextprotocol/servers)
+
+**Community-driven resources:**
+- [MCP Clients](https://modelcontextprotocol.io/clients) — clients that support MCP
+- [Community MCP Servers](https://github.com/modelcontextprotocol/servers?tab=readme-ov-file#-community-servers) — growing list of community servers
+- [Awesome MCP Servers](https://github.com/wong2/awesome-mcp-servers) — curated server list
+- [PulseMCP](https://www.pulsemcp.com/) — community hub and newsletter
+- [Discord Server](https://discord.gg/jHEGxQu2a5) — connect with MCP developers
+- Stack Overflow — tag: `model-context-protocol`
+
+## Types of contributions
+
+<AccordionGroup>
+  <Accordion title="Code contributions">
+    - Core protocol enhancements
+    - Bug fixes in SDKs or tooling
+    - New tool and server implementations
+    - Client and server libraries in additional languages
+  </Accordion>
+  <Accordion title="Documentation">
+    - Improving existing documentation clarity
+    - Creating tutorials and guides
+    - Translating documentation to new languages
+    - Adding code examples and sample applications
+  </Accordion>
+  <Accordion title="Community support">
+    - Answering questions in forums and discussions
+    - Testing pre-release features and reporting issues
+    - Organizing community events
+    - Mentoring new contributors
+  </Accordion>
+</AccordionGroup>
+
+## Contributing to the core protocol
+
+The core MCP protocol follows a deliberate three-stage contribution process:
+
+<Steps>
+  <Step title="Define — explore the problem space">
+    Identify the issue or gap. Validate that other MCP users face the same challenge. The MCP specification maintains a high bar for adding new concepts — it is easier to add things than to remove them.
+  </Step>
+  <Step title="Prototype — build an example solution">
+    Build a working prototype that demonstrates the practical application. Specification changes must be grounded in specific implementation challenges, not speculative ideas.
+  </Step>
+  <Step title="Write — draft the specification proposal">
+    Based on the prototype, write a formal specification proposal for review. Follow the [official contributing guidelines](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/CONTRIBUTING.md) for format and process.
+  </Step>
+</Steps>
+
+### Development environment setup
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/YOUR-USERNAME/modelcontextprotocol.git
+cd modelcontextprotocol
+
+# Install dependencies
+npm install
+
+# For schema changes, validate and generate schema.json
+npm run check:schema:ts
+npm run generate:schema
+
+# For documentation changes
+npm run check:docs
+npm run format
+
+# Preview documentation locally
+npm run serve:docs
+```
+
+### Example: contributing a bug fix
+
+This example shows a real pattern — improving type validation in the TypeScript SDK:
+
+```typescript
+// Before: missing property validation
+export function validateResource(resource: unknown): resource is MCPResource {
+  if (!resource || typeof resource !== 'object') return false;
+  const hasName = 'name' in resource;
+  const hasSchema = 'schema' in resource;
+  return hasName && hasSchema;
+}
+
+// After: improved validation with type checks
+export function validateResource(resource: unknown): resource is MCPResource {
+  if (!resource || typeof resource !== 'object') return false;
+  const hasName = 'name' in resource
+    && typeof (resource as MCPResource).name === 'string';
+  const hasSchema = 'schema' in resource
+    && typeof (resource as MCPResource).schema === 'object';
+  const hasDescription = !('description' in resource)
+    || typeof (resource as MCPResource).description === 'string';
+  return hasName && hasSchema && hasDescription;
+}
+```
+
+### Standard contribution workflow
+
+```bash
+# Clone the repository you want to contribute to
+git clone https://github.com/modelcontextprotocol/typescript-sdk.git
+cd typescript-sdk
+
+# Create a branch for your contribution
+git checkout -b feature/my-contribution
+
+# Make your changes, then run tests
+npm test
+
+# Commit and push
+git commit -am "Fix validation in resource handler"
+git push origin feature/my-contribution
+
+# Open a pull request and engage with reviewer feedback
+```
+
+## Creating and sharing MCP servers
+
+Building and publishing custom MCP servers is one of the most valuable contributions you can make.
+
+### MCP server frameworks
+
+In addition to the official SDKs (aligned with MCP Specification 2025-11-25), several community frameworks simplify server development:
+
+<CardGroup cols={2}>
+  <Card title="MCP-Framework" icon="bolt" href="https://mcp-framework.com/">
+    Build MCP servers with elegance and speed in TypeScript
+  </Card>
+  <Card title="MCP Declarative Java SDK" icon="java" href="https://github.com/codeboyzhou/mcp-declarative-java-sdk">
+    Annotation-driven MCP servers with Java
+  </Card>
+  <Card title="Quarkus MCP Server SDK" icon="code" href="https://github.com/quarkiverse/quarkus-mcp-server">
+    Java framework for MCP server development
+  </Card>
+  <Card title="Next.js MCP Server Template" icon="js" href="https://github.com/vercel-labs/mcp-for-next.js">
+    Starter template for Next.js MCP servers
+  </Card>
+</CardGroup>
+
+### Building a shareable tool package
+
+<Tabs>
+  <Tab title="Python (PyPI)">
+    Publish Python MCP tools as a PyPI package so others can install them with pip:
+
+    ```python
+    # mcp_nlp_tools/sentiment_tool.py
+    from mcp_tools import Tool, ToolRequest, ToolResponse, ToolExecutionException
+    from transformers import pipeline
+
+    class SentimentAnalysisTool(Tool):
+        """MCP tool for sentiment analysis of text."""
+
+        def __init__(self):
+            self.analyzer = pipeline(
+                "sentiment-analysis",
+                model="distilbert-base-uncased-finetuned-sst-2-english"
+            )
+
+        def get_name(self): return "sentimentAnalysis"
+        def get_description(self): return "Analyzes the sentiment of text"
+
+        def get_schema(self):
+            return {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Text to analyze"},
+                    "includeScore": {"type": "boolean", "default": True}
+                },
+                "required": ["text"]
+            }
+
+        async def execute_async(self, request: ToolRequest) -> ToolResponse:
+            text = request.parameters["text"]
+            include_score = request.parameters.get("includeScore", True)
+            result = self.analyzer(text)[0]
+            output = {"sentiment": result["label"], "text": text}
+            if include_score:
+                output["score"] = result["score"]
+            return ToolResponse(result=output)
+    ```
+
+    Publish to PyPI:
+    ```bash
+    python setup.py sdist bdist_wheel
+    python -m twine upload dist/*
+    ```
+  </Tab>
+  <Tab title="C# (NuGet)">
+    Package C# MCP tools as a NuGet library:
+
+    ```csharp
+    // McpFinanceTools/StockQuoteTool.cs
+    using Microsoft.Mcp.Tools;
+
+    public class StockQuoteTool : IMcpTool
+    {
+        private readonly HttpClient _httpClient;
+
+        public StockQuoteTool(HttpClient httpClient = null)
+        {
+            _httpClient = httpClient ?? new HttpClient();
+        }
+
+        public string Name => "stockQuote";
+        public string Description => "Gets current stock quotes for specified symbols";
+
+        public object GetSchema() => new {
+            type = "object",
+            properties = new {
+                symbol = new { type = "string", description = "Stock symbol (e.g., MSFT)" },
+                includeHistory = new { type = "boolean", default = false }
+            },
+            required = new[] { "symbol" }
+        };
+
+        public async Task<ToolResponse> ExecuteAsync(ToolRequest request)
+        {
+            string symbol = request.Parameters.GetProperty("symbol").GetString();
+            var quote = await GetStockQuoteAsync(symbol);
+            return new ToolResponse { Result = JsonSerializer.SerializeToElement(quote) };
+        }
+    }
+    ```
+
+    Publish to NuGet:
+    ```bash
+    dotnet pack -c Release
+    dotnet nuget push bin/Release/McpFinanceTools.1.0.0.nupkg \
+      -s https://api.nuget.org/v3/index.json -k YOUR_API_KEY
+    ```
+  </Tab>
+  <Tab title="Java (Maven)">
+    Distribute Java MCP tools via Maven Central or GitHub Packages:
+
+    ```java
+    // com.example.mcp.weather.WeatherForecastTool
+    public class WeatherForecastTool implements Tool {
+        private final HttpClient httpClient;
+        private final String apiKey;
+
+        public WeatherForecastTool(String apiKey) {
+            this.httpClient = HttpClient.newHttpClient();
+            this.apiKey = apiKey;
+        }
+
+        @Override public String getName() { return "weatherForecast"; }
+        @Override public String getDescription() {
+            return "Gets weather forecast for a specified location";
+        }
+
+        @Override
+        public ToolResponse execute(ToolRequest request) {
+            String location = request.getParameters().get("location").asText();
+            int days = request.getParameters().has("days")
+                ? request.getParameters().get("days").asInt() : 3;
+            Map<String, Object> forecast = getForecast(location, days);
+            return new ToolResponse.Builder().setResult(forecast).build();
+        }
+    }
+    ```
+
+    Build and deploy:
+    ```bash
+    mvn clean package
+    mvn deploy
+    ```
+  </Tab>
+</Tabs>
+
+### Sharing best practices
+
+When you publish an MCP tool or server, follow these practices to help others adopt it:
+
+<CardGroup cols={2}>
+  <Card title="Complete documentation" icon="book">
+    Document purpose, parameters, return values, and at least one complete usage example. Explain all external dependencies.
+  </Card>
+  <Card title="Robust error handling" icon="triangle-exclamation">
+    Provide useful error messages. Handle edge cases — empty inputs, API failures, invalid parameters — gracefully.
+  </Card>
+  <Card title="Performance" icon="gauge-high">
+    Optimize for speed and resource usage. Implement caching where appropriate and document scalability characteristics.
+  </Card>
+  <Card title="Security" icon="shield">
+    Validate and sanitize all inputs. Use secure authentication. Implement rate limiting for external API calls.
+  </Card>
+  <Card title="Testing" icon="flask">
+    Include comprehensive test coverage with unit tests and integration tests. Test edge cases and document test procedures.
+  </Card>
+  <Card title="Versioning" icon="tags">
+    Use semantic versioning. Document breaking changes clearly. Maintain backward compatibility where possible.
+  </Card>
+</CardGroup>
+
+## Code review guidelines
+
+When reviewing MCP contributions, evaluate these five dimensions:
+
+| Dimension | Questions to ask |
+|-----------|------------------|
+| **Clarity** | Is the code clear and well-documented? |
+| **Correctness** | Does it work as expected across edge cases? |
+| **Consistency** | Does it follow project conventions and style? |
+| **Completeness** | Are tests and documentation included? |
+| **Security** | Are there any authentication, validation, or injection risks? |
+
+## Contribution guidelines
+
+Follow these principles to maximize the chance your contribution is accepted:
+
+<Steps>
+  <Step title="Start small">
+    Begin with documentation improvements, bug fixes, or small enhancements. Build trust before tackling large features.
+  </Step>
+  <Step title="Follow the style guide">
+    Adhere to the coding style and conventions of the target repository. Read existing code before writing new code.
+  </Step>
+  <Step title="Write tests">
+    Include unit tests for all code contributions. Test both happy paths and error conditions.
+  </Step>
+  <Step title="Document your work">
+    Add clear documentation for new features or any behavioral changes.
+  </Step>
+  <Step title="Submit targeted PRs">
+    Keep pull requests focused on a single issue or feature. Avoid bundling unrelated changes.
+  </Step>
+  <Step title="Engage with feedback">
+    Be responsive to reviewer comments. Treat code review as a collaborative conversation, not a judgment.
+  </Step>
+</Steps>
+
+## Exercise
+
+1. Identify an area in the MCP ecosystem where you could contribute based on your skills
+2. Fork the relevant MCP repository and set up a local development environment
+3. Create a small enhancement, bug fix, or tool that benefits the community
+4. Document your contribution with proper tests and documentation
+5. Submit a pull request to the appropriate repository
+
+## Additional resources
+
+- [MCP Community Projects](https://github.com/topics/model-context-protocol)
+- [Official Contributing Guidelines](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/CONTRIBUTING.md)
+- [MCP GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+
+<CardGroup cols={2}>
+  <Card title="Next: Lessons from Early Adoption" icon="arrow-right" href="/modules/07-lessons-early-adoption">
+    See how real organizations have implemented MCP in production
+  </Card>
+  <Card title="Back: Advanced Topics" icon="arrow-left" href="/modules/05-advanced-topics">
+    Review scaling, security, and enterprise integration
+  </Card>
+</CardGroup>

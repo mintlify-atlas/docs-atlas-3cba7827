@@ -1,0 +1,261 @@
+---
+title: "stdio Transport Server"
+description: "Build MCP servers using the recommended stdio transport — simple, secure subprocess-based communication over standard input and output."
+---
+
+The stdio transport is the **recommended** transport mechanism for local MCP servers as of the MCP Specification 2025-06-18. It communicates through standard input and output streams, requires no HTTP server, and is simpler to implement, debug, and secure than any web-based transport.
+
+<Warning>
+The standalone SSE (Server-Sent Events) transport was **deprecated** in MCP Specification 2025-06-18. Use **stdio** for local servers and **Streamable HTTP** for remote servers.
+</Warning>
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Explain how the stdio transport works and why it is recommended
+- Build an MCP server using stdio in Python, TypeScript, and .NET
+- Debug a stdio server with the MCP Inspector
+- Integrate a stdio server with VS Code and Claude Desktop
+
+## How stdio transport works
+
+| Aspect | Detail |
+|--------|--------|
+| **Communication** | Server reads JSON-RPC messages from `stdin`; writes responses to `stdout` |
+| **Process model** | Client launches the server as a subprocess |
+| **Message format** | Newline-delimited JSON-RPC (no embedded newlines) |
+| **Logging** | Server writes UTF-8 strings to `stderr` — never to `stdout` |
+| **Security** | Process isolation; no open network ports |
+
+<Note>
+The server MUST NOT write anything to `stdout` that is not a valid MCP message. Use `stderr` for all logging.
+</Note>
+
+## Stdio vs. deprecated SSE
+
+| | stdio (current standard) | SSE (deprecated) |
+|---|---|---|
+| **Setup** | No web server needed | Requires HTTP server |
+| **Security** | Process isolation | Requires CORS, auth |
+| **Performance** | Direct stream | HTTP overhead |
+| **Debugging** | Simple — pipe Inspector directly | Requires network tools |
+
+## Building a stdio server
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import asyncio
+    import logging
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    server = Server("example-stdio-server")
+
+    @server.tool()
+    def calculate_sum(a: int, b: int) -> int:
+        """Calculate the sum of two numbers"""
+        return a + b
+
+    @server.tool()
+    def get_greeting(name: str) -> str:
+        """Generate a personalized greeting"""
+        return f"Hello, {name}! Welcome to MCP stdio server."
+
+    @server.tool()
+    def get_server_info() -> dict:
+        """Get information about this MCP server"""
+        return {
+            "server_name": "example-stdio-server",
+            "version": "1.0.0",
+            "transport": "stdio",
+            "capabilities": ["tools"]
+        }
+
+    async def main():
+        async with stdio_server(server) as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options()
+            )
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ```typescript
+    #!/usr/bin/env node
+    import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+    import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+    import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+    const server = new Server(
+      { name: "example-stdio-server", version: "1.0.0" },
+      { capabilities: { tools: {} } }
+    );
+
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [
+        {
+          name: "get_greeting",
+          description: "Get a personalized greeting",
+          inputSchema: {
+            type: "object",
+            properties: { name: { type: "string", description: "Name to greet" } },
+            required: ["name"],
+          },
+        },
+      ],
+    }));
+
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (request.params.name === "get_greeting") {
+        return {
+          content: [{
+            type: "text",
+            text: `Hello, ${request.params.arguments?.name}! Welcome to MCP stdio server.`,
+          }],
+        };
+      }
+      throw new Error(`Unknown tool: ${request.params.name}`);
+    });
+
+    async function runServer() {
+      const transport = new StdioServerTransport();
+      await server.connect(transport);
+    }
+
+    runServer().catch(console.error);
+    ```
+  </Tab>
+  <Tab title=".NET">
+    ```csharp
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
+    using ModelContextProtocol.Server;
+    using System.ComponentModel;
+
+    var builder = Host.CreateApplicationBuilder(args);
+
+    builder.Services
+        .AddMcpServer()
+        .WithStdioServerTransport()
+        .WithTools<Tools>();
+
+    var app = builder.Build();
+    await app.RunAsync();
+
+    [McpServerToolType]
+    public class Tools
+    {
+        [McpServerTool, Description("Get a personalized greeting")]
+        public string GetGreeting(string name)
+            => $"Hello, {name}! Welcome to MCP stdio server.";
+
+        [McpServerTool, Description("Calculate the sum of two numbers")]
+        public int CalculateSum(int a, int b) => a + b;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Debugging your stdio server
+
+<Steps>
+  <Step title="Install the MCP Inspector">
+    ```bash
+    npm install -g @modelcontextprotocol/inspector
+    ```
+  </Step>
+
+  <Step title="Run the Inspector with your server">
+    <Tabs>
+      <Tab title="Python">
+        ```bash
+        npx @modelcontextprotocol/inspector python server.py
+        ```
+      </Tab>
+      <Tab title="TypeScript">
+        ```bash
+        npx @modelcontextprotocol/inspector node build/index.js
+        ```
+      </Tab>
+    </Tabs>
+
+    The Inspector opens a browser window. You will see your server's capabilities listed, and you can test tools interactively while monitoring the raw JSON-RPC messages.
+  </Step>
+
+  <Step title="Debug in VS Code">
+    Create `.vscode/launch.json`:
+
+    ```json
+    {
+      "version": "0.2.0",
+      "configurations": [
+        {
+          "name": "Debug MCP Server",
+          "type": "python",
+          "request": "launch",
+          "program": "server.py",
+          "console": "integratedTerminal"
+        }
+      ]
+    }
+    ```
+
+    Set breakpoints in your server code, start the debugger, and use the Inspector to send requests.
+  </Step>
+</Steps>
+
+## Integrating with Claude Desktop
+
+Add your server to the Claude Desktop config file:
+
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "example-stdio-server": {
+      "command": "python",
+      "args": ["path/to/your/server.py"]
+    }
+  }
+}
+```
+
+Restart Claude and test with prompts like:
+- "Can you greet me using the greeting tool?"
+- "Calculate the sum of 15 and 27"
+
+## Debugging tips
+
+<Accordion title="Common issues and fixes">
+  **Server won't start**
+  - Check that all dependencies are installed: `pip install mcp`
+  - Verify Python syntax and indentation
+  - Look for error messages in the console
+
+  **Tools not appearing in Inspector**
+  - Ensure `@server.tool()` decorators are present
+  - Check that tool functions are defined before `main()`
+  - Verify the server is using stdio transport correctly
+
+  **Unexpected output on stdout**
+  - Use `logging` / `stderr` for debug output — never `print()` or `console.log()` to stdout
+  - The MCP transport layer reads everything on stdout as a protocol message
+</Accordion>
+
+## Key takeaways
+
+- The stdio transport is the recommended mechanism for local MCP servers (MCP spec 2025-06-18).
+- Stdio provides process isolation with no open network ports — simpler and more secure than HTTP-based transports.
+- You can debug stdio servers with the MCP Inspector and VS Code's debugger.
+- Never write non-MCP content to `stdout`; use `stderr` for logging.

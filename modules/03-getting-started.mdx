@@ -1,0 +1,104 @@
+---
+title: "Getting Started with MCP"
+description: "An overview of Module 3 covering servers, clients, transports, testing, and deployment for the Model Context Protocol."
+---
+
+This module takes you from zero to a working MCP implementation. You will build servers, write clients, add LLM integration, configure IDE tooling, explore transport options, test your code, and deploy to the cloud.
+
+<Note>
+Think of MCP like a USB-C port for AI applications — it provides a standardized way to connect AI models to different data sources and tools, regardless of which language or framework you use.
+</Note>
+
+## What you'll build
+
+By the end of this module you will have:
+
+- A working MCP server with tools, resources, and prompts
+- A client that connects to and invokes your server
+- A client powered by an LLM that selects tools automatically based on natural language
+- VS Code + GitHub Copilot wired up to your server
+- An understanding of both stdio and Streamable HTTP transports
+- Tests for your server logic
+- A deployment strategy for local and cloud environments
+
+## Lessons in this module
+
+<CardGroup cols={2}>
+  <Card title="Building Your First Server" icon="server" href="/modules/03-first-server">
+    Create a calculator MCP server in TypeScript, Python, .NET, Java, or Rust and inspect it with the MCP Inspector.
+  </Card>
+  <Card title="Building an MCP Client" icon="plug" href="/modules/03-client">
+    Write a client that connects to your server and programmatically lists and invokes its tools, resources, and prompts.
+  </Card>
+  <Card title="Client with LLM Integration" icon="brain" href="/modules/03-llm-client">
+    Add an LLM to your client so users interact via natural language instead of explicit API calls.
+  </Card>
+  <Card title="VS Code Integration" icon="code" href="/modules/03-vscode">
+    Configure VS Code and GitHub Copilot Agent mode to consume your MCP server directly from the editor.
+  </Card>
+  <Card title="stdio Transport Server" icon="terminal" href="/modules/03-stdio-server">
+    Learn the recommended local transport: subprocess-based stdio communication with JSON-RPC.
+  </Card>
+  <Card title="HTTP Streaming" icon="wifi" href="/modules/03-http-streaming">
+    Use Streamable HTTP — the recommended transport for remote MCP servers — to deliver real-time progress notifications.
+  </Card>
+  <Card title="AI Toolkit Integration" icon="wrench" href="/modules/03-ai-toolkit">
+    Use the AI Toolkit VS Code extension to build, connect, and test an agent that uses your MCP server.
+  </Card>
+  <Card title="Testing MCP Servers" icon="flask" href="/modules/03-testing">
+    Test your server with MCP Inspector, curl, and unit testing frameworks.
+  </Card>
+  <Card title="Deploying MCP Servers" icon="cloud-arrow-up" href="/modules/03-deployment">
+    Deploy your MCP server locally, in containers, and to Azure Container Apps.
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+<CardGroup cols={2}>
+  <Card title="Development environment" icon="laptop">
+    One of: Node.js 18+, Python 3.8+, .NET 8+, Java 21+, or Rust (latest stable)
+  </Card>
+  <Card title="IDE / Editor" icon="pen-to-square">
+    Visual Studio Code is recommended; any modern editor works
+  </Card>
+  <Card title="Package manager" icon="box">
+    npm/yarn (Node), pip (Python), NuGet (.NET), Maven/Gradle (Java), or Cargo (Rust)
+  </Card>
+  <Card title="API key" icon="key">
+    A GitHub Personal Access Token (PAT) for lessons that use GitHub Models as the LLM backend
+  </Card>
+</CardGroup>
+
+## Official SDKs
+
+MCP provides official SDKs for every major language. All examples in this module use these SDKs.
+
+| Language | SDK | Maintainer |
+|----------|-----|------------|
+| TypeScript | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | Anthropic |
+| Python | [mcp (FastMCP)](https://github.com/modelcontextprotocol/python-sdk) | Anthropic |
+| C# / .NET | [ModelContextProtocol](https://github.com/modelcontextprotocol/csharp-sdk) | Microsoft |
+| Java | [mcp-java-sdk](https://github.com/modelcontextprotocol/java-sdk) | Spring AI |
+| Kotlin | [kotlin-sdk](https://github.com/modelcontextprotocol/kotlin-sdk) | Anthropic |
+| Rust | [rmcp](https://github.com/modelcontextprotocol/rust-sdk) | Anthropic |
+| Swift | [swift-sdk](https://github.com/modelcontextprotocol/swift-sdk) | Loopwork AI |
+| Go | [go-sdk](https://github.com/modelcontextprotocol/go-sdk) | Anthropic |
+
+## Key takeaways
+
+- Setting up an MCP development environment is straightforward with language-specific SDKs.
+- MCP servers expose **tools** (functions), **resources** (data), and **prompts** (templates) through a unified protocol.
+- MCP clients connect to servers and models to leverage extended capabilities.
+- Testing and debugging are essential for reliable MCP implementations.
+- Deployment options range from local development to cloud-based solutions.
+
+## Start here
+
+Begin with the first lesson to build your first server:
+
+<Card title="Building Your First MCP Server" icon="play" href="/modules/03-first-server">
+  Install the SDK, scaffold a project, register tools and resources, and run the MCP Inspector.
+</Card>

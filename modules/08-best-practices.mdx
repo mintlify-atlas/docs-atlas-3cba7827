@@ -1,0 +1,529 @@
+---
+title: "Module 8: Best Practices"
+description: "Production-grade patterns for MCP server design, testing, error handling, caching, security, and performance optimization — with code examples in C#, Python, TypeScript, and Java."
+---
+
+As MCP ecosystems grow in complexity, following established patterns ensures reliability, maintainability, and interoperability. This module consolidates practical wisdom from real-world MCP implementations to guide you in creating robust, efficient servers with effective resources, prompts, and tools.
+
+## Learning objectives
+
+By the end of this module, you will be able to:
+
+- Apply industry best practices in MCP server and feature design
+- Create comprehensive testing strategies for MCP servers
+- Design efficient, reusable workflow patterns for complex MCP applications
+- Implement proper error handling, logging, and observability
+- Optimize MCP implementations for performance, security, and maintainability
+
+## MCP core principles
+
+Five principles guide effective MCP development:
+
+<CardGroup cols={2}>
+  <Card title="Standardized communication" icon="arrows-left-right">
+    MCP uses JSON-RPC 2.0 as its foundation, providing a consistent format for requests, responses, and error handling across all implementations.
+  </Card>
+  <Card title="User-centric design" icon="user">
+    Always prioritize user consent, control, and transparency. Users should understand what data is shared and which actions are authorized.
+  </Card>
+  <Card title="Security first" icon="shield">
+    Implement robust security measures including authentication, authorization, validation, and rate limiting from day one.
+  </Card>
+  <Card title="Modular architecture" icon="puzzle-piece">
+    Design servers with a modular approach — each tool and resource has a clear, focused purpose.
+  </Card>
+  <Card title="Stateful connections" icon="link">
+    Leverage MCP's ability to maintain state across multiple requests for coherent, context-aware interactions.
+  </Card>
+</CardGroup>
+
+## Tool design best practices
+
+### Single responsibility principle
+
+Each MCP tool should have a clear, focused purpose. Avoid monolithic tools that attempt to handle multiple concerns.
+
+```csharp
+// A focused tool that does one thing well
+public class WeatherForecastTool : ITool
+{
+    private readonly IWeatherService _weatherService;
+
+    public WeatherForecastTool(IWeatherService weatherService)
+    {
+        _weatherService = weatherService;
+    }
+
+    public string Name => "weatherForecast";
+    public string Description => "Gets weather forecast for a specific location";
+
+    public ToolDefinition GetDefinition() => new ToolDefinition
+    {
+        Name = Name,
+        Description = Description,
+        Parameters = new Dictionary<string, ParameterDefinition>
+        {
+            ["location"] = new() { Type = ParameterType.String,
+                                   Description = "City or location name" },
+            ["days"]     = new() { Type = ParameterType.Integer,
+                                   Description = "Number of forecast days",
+                                   Default = 3 }
+        },
+        Required = new[] { "location" }
+    };
+
+    public async Task<ToolResponse> ExecuteAsync(IDictionary<string, object> parameters)
+    {
+        var location = parameters["location"].ToString();
+        var days = parameters.ContainsKey("days") ? Convert.ToInt32(parameters["days"]) : 3;
+        var forecast = await _weatherService.GetForecastAsync(location, days);
+        return new ToolResponse
+        {
+            Content = new List<ContentItem> { new TextContent(JsonSerializer.Serialize(forecast)) }
+        };
+    }
+}
+```
+
+### Composable tools
+
+Design tools that can work independently or together in workflows:
+
+```python
+class DataFetchTool(Tool):
+    def get_name(self): return "dataFetch"
+    # Fetches raw data from a source
+
+class DataAnalysisTool(Tool):
+    def get_name(self): return "dataAnalysis"
+    # Accepts output from dataFetch and runs analysis
+
+class DataVisualizationTool(Tool):
+    def get_name(self): return "dataVisualize"
+    # Accepts output from dataAnalysis and renders a chart
+```
+
+## Schema design
+
+The schema is the contract between the model and your tool. Well-designed schemas lead to better usability and fewer errors.
+
+### Clear parameter descriptions
+
+```csharp
+public object GetSchema() => new {
+    type = "object",
+    properties = new {
+        query = new {
+            type = "string",
+            description = "Search query text. Use precise keywords for better results."
+        },
+        filters = new {
+            type = "object",
+            description = "Optional filters to narrow results",
+            properties = new {
+                dateRange = new {
+                    type = "string",
+                    description = "Date range in format YYYY-MM-DD:YYYY-MM-DD"
+                },
+                category = new {
+                    type = "string",
+                    description = "Category name to filter by"
+                }
+            }
+        },
+        limit = new {
+            type = "integer",
+            description = "Maximum results to return (1–50)",
+            default = 10
+        }
+    },
+    required = new[] { "query" }
+};
+```
+
+### Validation constraints
+
+Include type constraints and enum values to prevent invalid inputs at the schema level:
+
+```java
+Map<String, Object> email = new HashMap<>();
+email.put("type", "string");
+email.put("format", "email");  // Built-in format validation
+email.put("description", "User email address");
+
+Map<String, Object> age = new HashMap<>();
+age.put("type", "integer");
+age.put("minimum", 13);
+age.put("maximum", 120);
+
+Map<String, Object> subscription = new HashMap<>();
+subscription.put("type", "string");
+subscription.put("enum", Arrays.asList("free", "basic", "premium"));
+subscription.put("default", "free");
+```
+
+### Consistent return structures
+
+Always return the same structure, even on error:
+
+```python
+async def execute_async(self, request):
+    try:
+        results = await self._search_database(request.parameters["query"])
+        return ToolResponse(result={
+            "matches": [self._format_item(item) for item in results],
+            "totalCount": len(results),
+            "status": "success"
+        })
+    except Exception as e:
+        return ToolResponse(result={
+            "matches": [],
+            "totalCount": 0,
+            "status": "error",
+            "error": str(e)
+        })
+```
+
+## Error handling
+
+### Comprehensive error handling with typed exceptions
+
+```python
+async def execute(self, parameters):
+    try:
+        if "query" not in parameters:
+            raise ToolParameterError("Missing required parameter: query")
+
+        query = parameters["query"]
+        if self._contains_unsafe_sql(query):
+            raise ToolSecurityError("Query contains potentially unsafe SQL")
+
+        async with timeout(10):
+            result = await self._database.execute_query(query)
+            return ToolResponse(content=[TextContent(json.dumps(result))])
+
+    except asyncio.TimeoutError:
+        raise ToolExecutionError("Database query timed out after 10 seconds")
+    except DatabaseConnectionError as e:
+        self._log_error("Database connection error", e)
+        raise ToolExecutionError(f"Database connection error: {str(e)}")
+    except ToolError:
+        raise  # Let tool-specific errors pass through
+    except Exception as e:
+        self._log_error("Unexpected error", e)
+        raise ToolExecutionError(f"An unexpected error occurred: {str(e)}")
+```
+
+### Retry logic for transient failures
+
+```python
+async def execute_async(self, request):
+    max_retries = 3
+    base_delay = 1  # seconds
+
+    for retry_count in range(max_retries):
+        try:
+            return await self._call_api(request.parameters)
+        except TransientError as e:
+            if retry_count == max_retries - 1:
+                raise ToolExecutionError(
+                    f"Operation failed after {max_retries} attempts: {str(e)}"
+                )
+            delay = base_delay * (2 ** retry_count)  # Exponential backoff
+            await asyncio.sleep(delay)
+        except Exception as e:
+            raise ToolExecutionError(f"Operation failed: {str(e)}")
+```
+
+## Performance optimization
+
+### Caching for expensive operations
+
+```csharp
+public async Task<ToolResponse> ExecuteAsync(IDictionary<string, object> parameters)
+{
+    var location = parameters["location"].ToString();
+    var days = Convert.ToInt32(parameters.GetValueOrDefault("days", 3));
+    string cacheKey = $"weather:{location}:{days}";
+
+    // Try cache first
+    string cached = await _cache.GetStringAsync(cacheKey);
+    if (!string.IsNullOrEmpty(cached))
+    {
+        return new ToolResponse { Content = new List<ContentItem> { new TextContent(cached) } };
+    }
+
+    // Cache miss — call the service
+    var forecast = await _weatherService.GetForecastAsync(location, days);
+    string json = JsonSerializer.Serialize(forecast);
+
+    await _cache.SetStringAsync(cacheKey, json, new DistributedCacheEntryOptions
+    {
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+    });
+
+    return new ToolResponse { Content = new List<ContentItem> { new TextContent(json) } };
+}
+```
+
+### Resource throttling with a token bucket
+
+```python
+class ThrottledApiTool(Tool):
+    def __init__(self):
+        self.rate_limiter = TokenBucketRateLimiter(
+            tokens_per_second=5,
+            bucket_size=10
+        )
+
+    async def execute_async(self, request):
+        delay = self.rate_limiter.get_delay_time()
+        if delay > 2.0:
+            raise ToolExecutionError(
+                f"Rate limit exceeded. Try again in {delay:.1f} seconds."
+            )
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        self.rate_limiter.consume()
+        return await self._call_api(request.parameters)
+```
+
+### Asynchronous processing for long-running operations
+
+```java
+@Override
+public ToolResponse execute(ToolRequest request) {
+    String documentId = request.getParameters().get("documentId").asText();
+    String processId = UUID.randomUUID().toString();
+
+    // Start async processing
+    CompletableFuture.runAsync(() -> {
+        try {
+            documentService.processDocument(documentId);
+            processStatusRepository.updateStatus(processId, "completed");
+        } catch (Exception ex) {
+            processStatusRepository.updateStatus(processId, "failed", ex.getMessage());
+        }
+    }, executorService);
+
+    // Return immediately with a process ID the client can poll
+    return new ToolResponse.Builder()
+        .setResult(Map.of(
+            "processId", processId,
+            "status", "processing",
+            "estimatedCompletionTime", ZonedDateTime.now().plusMinutes(5)
+        ))
+        .build();
+}
+```
+
+## Security implementation
+
+### Parameter validation
+
+```csharp
+public async Task<ToolResponse> ExecuteAsync(ToolRequest request)
+{
+    if (!request.Parameters.TryGetProperty("query", out var queryProp))
+        throw new ToolExecutionException("Missing required parameter: query");
+
+    if (queryProp.ValueKind != JsonValueKind.String)
+        throw new ToolExecutionException("Query parameter must be a string");
+
+    var query = queryProp.GetString();
+
+    if (string.IsNullOrWhiteSpace(query))
+        throw new ToolExecutionException("Query parameter cannot be empty");
+
+    if (query.Length > 500)
+        throw new ToolExecutionException(
+            "Query parameter exceeds maximum length of 500 characters");
+
+    if (ContainsSqlInjection(query))
+        throw new ToolExecutionException(
+            "Invalid query: contains potentially unsafe SQL");
+
+    // Proceed with validated input
+}
+```
+
+### Authentication and authorization
+
+```java
+@Override
+public ToolResponse execute(ToolRequest request) {
+    // 1. Authenticate
+    String authToken = request.getContext().getAuthToken();
+    UserIdentity user;
+    try {
+        user = authService.validateToken(authToken);
+    } catch (AuthenticationException e) {
+        return ToolResponse.error("Authentication failed: " + e.getMessage());
+    }
+
+    // 2. Authorize for the specific resource and operation
+    String dataId = request.getParameters().get("dataId").getAsString();
+    String operation = request.getParameters().get("operation").getAsString();
+
+    if (!authzService.isAuthorized(user, "data:" + dataId, operation)) {
+        return ToolResponse.error("Access denied: Insufficient permissions");
+    }
+
+    // 3. Proceed
+    Object data = dataService.getData(dataId, user.getId());
+    return ToolResponse.success(data);
+}
+```
+
+### Sensitive data handling
+
+```python
+class SecureDataTool(Tool):
+    async def execute_async(self, request):
+        user_data = await self.user_service.get_user_data(
+            request.parameters["userId"]
+        )
+        include_sensitive = request.parameters.get("includeSensitiveData", False)
+
+        if not include_sensitive or not self._is_authorized_for_sensitive_data(request):
+            user_data = self._redact_sensitive_fields(user_data)
+
+        return ToolResponse(result=user_data)
+
+    def _redact_sensitive_fields(self, data):
+        redacted = data.copy()
+        for field in ["ssn", "creditCardNumber", "password"]:
+            if field in redacted:
+                redacted[field] = "REDACTED"
+        return redacted
+```
+
+## Testing strategy
+
+<Tabs>
+  <Tab title="Unit tests">
+    Test each tool in isolation with mocked dependencies:
+
+    ```typescript
+    describe('WeatherForecastTool', () => {
+      let tool: WeatherForecastTool;
+      let mockWeatherService: jest.Mocked<IWeatherService>;
+
+      beforeEach(() => {
+        mockWeatherService = { getForecasts: jest.fn() } as any;
+        tool = new WeatherForecastTool(mockWeatherService);
+      });
+
+      it('should return weather forecast for a valid location', async () => {
+        mockWeatherService.getForecasts.mockResolvedValue({
+          location: 'Seattle',
+          forecasts: [
+            { date: '2025-07-16', temperature: 72, conditions: 'Sunny' }
+          ]
+        });
+
+        const response = await tool.execute({ location: 'Seattle', days: 1 });
+
+        expect(mockWeatherService.getForecasts).toHaveBeenCalledWith('Seattle', 1);
+        expect(response.content[0].text).toContain('Seattle');
+      });
+
+      it('should handle errors from the weather service', async () => {
+        mockWeatherService.getForecasts.mockRejectedValue(
+          new Error('Service unavailable')
+        );
+        await expect(tool.execute({ location: 'Seattle', days: 1 }))
+          .rejects.toThrow('Weather service error: Service unavailable');
+      });
+    });
+    ```
+  </Tab>
+  <Tab title="Integration tests">
+    Test the complete flow from client request to server response:
+
+    ```python
+    @pytest.mark.asyncio
+    async def test_mcp_server_integration():
+        server = McpServer()
+        server.register_tool(WeatherForecastTool(MockWeatherService()))
+        await server.start(port=5000)
+
+        try:
+            client = McpClient("http://localhost:5000")
+
+            # Test tool discovery
+            tools = await client.discover_tools()
+            assert "weatherForecast" in [t.name for t in tools]
+
+            # Test tool execution
+            response = await client.execute_tool("weatherForecast", {
+                "location": "Seattle",
+                "days": 3
+            })
+            assert response.status_code == 200
+            assert "Seattle" in response.content[0].text
+        finally:
+            await server.stop()
+    ```
+  </Tab>
+  <Tab title="Error condition tests">
+    Create specific tests for failure modes:
+
+    ```python
+    @pytest.mark.asyncio
+    async def test_api_tool_handles_timeout():
+        tool = ApiTool(timeout=0.1)  # Very short timeout
+
+        with aioresponses() as mocked:
+            mocked.get(
+                "https://api.example.com/data",
+                callback=lambda *a, **k: asyncio.sleep(0.5)  # Exceeds timeout
+            )
+            request = ToolRequest(
+                tool_name="apiTool",
+                parameters={"url": "https://api.example.com/data"}
+            )
+            with pytest.raises(ToolExecutionException) as exc_info:
+                await tool.execute_async(request)
+            assert "timed out" in str(exc_info.value).lower()
+    ```
+  </Tab>
+</Tabs>
+
+## Security best practices checklist
+
+<AccordionGroup>
+  <Accordion title="User consent and control">
+    Require explicit user consent before accessing data or performing operations. Provide clear controls over what data is shared and which actions are authorized.
+  </Accordion>
+  <Accordion title="Tool safety">
+    Require explicit user consent before invoking any tool. Ensure users understand each tool's functionality. Enforce robust security boundaries between tools.
+  </Accordion>
+  <Accordion title="Data privacy">
+    Only expose user data with explicit consent. Protect data with appropriate access controls. Safeguard against unauthorized data transmission.
+  </Accordion>
+  <Accordion title="Capability negotiation">
+    During connection setup, exchange information about supported features, protocol versions, available tools, and resources. Only advertise what the connecting client is authorized to use.
+  </Accordion>
+  <Accordion title="Progress tracking and cancellation">
+    For long-running operations, report progress updates to enable responsive UIs. Allow clients to cancel in-flight requests that are no longer needed.
+  </Accordion>
+</AccordionGroup>
+
+## Additional references
+
+- [MCP Documentation](https://modelcontextprotocol.io/)
+- [MCP Specification (2025-11-25)](https://spec.modelcontextprotocol.io/specification/2025-11-25/)
+- [MCP Security Best Practices](https://modelcontextprotocol.io/specification/draft/basic/security_best_practices)
+- [OWASP MCP Top 10](https://microsoft.github.io/mcp-azure-security-guide/mcp/)
+- [MCP Security Summit Workshop](https://azure-samples.github.io/sherpa/)
+
+<CardGroup cols={2}>
+  <Card title="Next: Case Studies" icon="arrow-right" href="/modules/09-case-study">
+    See MCP applied to real-world enterprise scenarios
+  </Card>
+  <Card title="Back: Early Adoption Lessons" icon="arrow-left" href="/modules/07-lessons-early-adoption">
+    Review production case studies and emerging trends
+  </Card>
+</CardGroup>

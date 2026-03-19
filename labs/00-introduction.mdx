@@ -1,0 +1,214 @@
+---
+title: "Lab 0: Introduction to MCP Database Integration"
+description: "Understand the Zava Retail use case, MCP server architecture, technology stack, and how Row Level Security enables multi-tenant data access."
+---
+
+## Objectives
+
+By the end of this lab you will be able to:
+
+- Define Model Context Protocol and its core benefits for database integration
+- Identify key components of an MCP server architecture with databases
+- Understand the Zava Retail use case and its business requirements
+- Recognize enterprise patterns for secure, scalable database access
+- List the tools and technologies used throughout this learning path
+
+## The challenge: AI meets real-world data
+
+Modern AI assistants are powerful but face significant limitations when working with real-world business data.
+
+| Challenge | Description | Business impact |
+|-----------|-------------|----------------|
+| Static knowledge | Models trained on fixed datasets cannot access current business data | Outdated insights, missed opportunities |
+| Data silos | Information locked in databases that AI cannot reach | Incomplete analysis, fragmented workflows |
+| Security constraints | Direct database access raises compliance concerns | Limited deployment, manual data preparation |
+| Complex queries | Business users need technical knowledge to extract insights | Reduced adoption, inefficient processes |
+
+**Model Context Protocol** addresses these challenges by providing:
+
+- **Real-time data access** — AI assistants query live databases and APIs
+- **Secure integration** — Controlled access with authentication and permissions
+- **Natural language interface** — Business users ask questions in plain English
+- **Standardized protocol** — Works across different AI platforms and tools
+
+## Meet Zava Retail
+
+Throughout this learning path you will build an MCP server for **Zava Retail**, a fictional DIY retail chain. This realistic scenario demonstrates enterprise-grade MCP implementation.
+
+Zava Retail operates:
+- 8 physical stores across Washington state (Seattle, Bellevue, Tacoma, Spokane, Everett, Redmond, Kirkland)
+- 1 online store for e-commerce sales
+- A diverse product catalog including tools, hardware, garden supplies, and building materials
+- Multi-level management with store managers, regional managers, and executives
+
+### Business requirements
+
+Store managers and executives need AI-powered analytics to:
+
+1. Analyze sales performance across stores and time periods
+2. Track inventory levels and identify restocking needs
+3. Understand customer behavior and purchasing patterns
+4. Discover products through semantic search
+5. Generate reports with natural language queries
+6. Maintain data security with role-based access control
+
+## Architecture overview
+
+The MCP server implements a layered architecture optimized for database integration:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    VS Code AI Client                        │
+│                  (Natural Language Queries)                 │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ HTTP/SSE
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     MCP Server                              │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐  │
+│  │   Tool Layer    │ │  Security Layer │ │  Config Layer │  │
+│  │ • Query Tools   │ │ • RLS Context   │ │ • Environment │  │
+│  │ • Schema Tools  │ │ • User Identity │ │ • Connections │  │
+│  │ • Search Tools  │ │ • Access Control│ │ • Validation  │  │
+│  └─────────────────┘ └─────────────────┘ └───────────────┘  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ asyncpg
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                PostgreSQL Database                          │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌───────────────┐  │
+│  │  Retail Schema  │ │   RLS Policies  │ │   pgvector    │  │
+│  │ • Stores        │ │ • Store-based   │ │ • Embeddings  │  │
+│  │ • Customers     │ │   Isolation     │ │ • Similarity  │  │
+│  │ • Products      │ │ • Role Control  │ │   Search      │  │
+│  │ • Orders        │ │ • Audit Logs    │ │               │  │
+│  └─────────────────┘ └─────────────────┘ └───────────────┘  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ REST API
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Azure OpenAI                               │
+│               (Text Embeddings)                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key components
+
+**MCP Server Layer**
+- FastMCP Framework — Modern Python MCP server implementation
+- Tool Registration — Declarative tool definitions with type safety
+- Request Context — User identity and session management
+- Error Handling — Robust error management and logging
+
+**Database Integration Layer**
+- Connection Pooling — Efficient asyncpg connection management
+- Schema Provider — Dynamic table schema discovery
+- Query Executor — Secure SQL execution with RLS context
+- Transaction Management — ACID compliance and rollback handling
+
+**Security Layer**
+- Row Level Security — PostgreSQL RLS for multi-tenant data isolation
+- User Identity — Store manager authentication and authorization
+- Access Control — Fine-grained permissions and audit trails
+- Input Validation — SQL injection prevention and query validation
+
+**AI Enhancement Layer**
+- Semantic Search — Vector embeddings for product discovery
+- Azure OpenAI Integration — Text embedding generation
+- Similarity Algorithms — pgvector cosine similarity search
+
+## Technology stack
+
+### Core technologies
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| MCP Framework | FastMCP (Python) | Modern MCP server implementation |
+| Database | PostgreSQL 17 + pgvector | Relational data with vector search |
+| AI Services | Azure OpenAI | Text embeddings and language models |
+| Containerization | Docker + Docker Compose | Development environment |
+| Cloud Platform | Microsoft Azure | Production deployment |
+| IDE Integration | VS Code | AI Chat and development workflow |
+
+### Production stack
+
+| Service | Azure resource | Purpose |
+|---------|---------------|---------|
+| Database | Azure Database for PostgreSQL | Managed database service |
+| Container | Azure Container Apps | Serverless container hosting |
+| AI Services | Azure AI Foundry | OpenAI models and endpoints |
+| Monitoring | Application Insights | Observability and diagnostics |
+| Security | Azure Key Vault | Secrets and configuration management |
+
+## Real-world usage scenarios
+
+### Scenario 1: Store manager performance review
+
+Sarah, the Seattle store manager, asks: *"Show me the top 10 products by revenue for my store in Q4 2024."*
+
+<Steps>
+  <Step title="Query sent to MCP server">
+    VS Code AI Chat forwards the natural language query.
+  </Step>
+  <Step title="Store context identified">
+    MCP server resolves Sarah's identity to the Seattle store.
+  </Step>
+  <Step title="RLS filters data">
+    PostgreSQL Row Level Security automatically restricts results to the Seattle store.
+  </Step>
+  <Step title="SQL executed">
+    A sales query runs against the filtered dataset.
+  </Step>
+  <Step title="Results returned">
+    Formatted results and AI-generated insights are delivered to Chat.
+  </Step>
+</Steps>
+
+### Scenario 2: Semantic product search
+
+Mike, an inventory manager, asks: *"What products do we sell that are similar to 'waterproof electrical connectors for outdoor use'?"*
+
+<Steps>
+  <Step title="Query processed">
+    The semantic search tool receives the natural language query.
+  </Step>
+  <Step title="Embedding generated">
+    Azure OpenAI converts the query text to a 1536-dimensional vector.
+  </Step>
+  <Step title="Similarity search">
+    pgvector performs cosine similarity search against product embeddings.
+  </Step>
+  <Step title="Results ranked">
+    Products are ranked by semantic relevance and returned with details.
+  </Step>
+</Steps>
+
+## Security model preview
+
+Row Level Security ensures data isolation at the database level:
+
+```sql
+-- Store managers see only their store's data
+CREATE POLICY store_manager_policy ON retail.orders
+  FOR ALL TO store_managers
+  USING (store_id = get_current_user_store());
+
+-- Regional managers see multiple stores
+CREATE POLICY regional_manager_policy ON retail.orders
+  FOR ALL TO regional_managers
+  USING (store_id = ANY(get_user_store_list()));
+```
+
+Each MCP connection carries:
+- **Store Manager ID** — Unique identifier for RLS context
+- **Role Assignment** — Permissions and access levels
+- **Session Management** — Secure authentication tokens
+- **Audit Logging** — Complete access history
+
+<Note>
+  This learning path uses fictional retail data for educational purposes. Follow your organization's data governance and security policies when implementing similar solutions in production.
+</Note>
+
+<Card title="Next: Lab 1 — Core Architecture" icon="arrow-right" href="/labs/01-architecture">
+  Dive into the layered MCP server architecture, database design patterns, and connection management strategies.
+</Card>

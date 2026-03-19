@@ -1,0 +1,170 @@
+---
+title: "Testing MCP Servers"
+description: "Test your MCP server with the MCP Inspector, curl, and unit testing frameworks to ensure it behaves correctly."
+---
+
+Effective testing ensures your MCP server behaves as expected and helps you quickly identify and resolve issues. MCP gives you three complementary approaches: the visual Inspector, HTTP-based manual testing with curl, and automated unit tests.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Use the MCP Inspector in both visual and CLI modes
+- Test MCP server endpoints manually using curl
+- Write unit tests for server tools using pytest
+- Select the right testing approach for each situation
+
+## Testing approaches
+
+<CardGroup cols={3}>
+  <Card title="MCP Inspector" icon="magnifying-glass">
+    Visual GUI + CLI tool for interactively discovering and testing tools, resources, and prompts.
+  </Card>
+  <Card title="Manual testing (curl)" icon="terminal">
+    Direct HTTP requests to test individual endpoints. Good for quick checks and CI scripting.
+  </Card>
+  <Card title="Unit testing" icon="flask">
+    Automated tests using your language's testing framework. Ideal for regression testing.
+  </Card>
+</CardGroup>
+
+## MCP Inspector
+
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is built in Node.js and runs via `npx` — no global install required.
+
+### Visual mode
+
+Launch the Inspector with your server command. It starts a browser UI where you can discover capabilities and test tools interactively:
+
+```bash
+# TypeScript server
+npx @modelcontextprotocol/inspector node build/index.js
+
+# Python server
+npx @modelcontextprotocol/inspector python server.py
+
+# .NET server
+npx @modelcontextprotocol/inspector dotnet run
+```
+
+The Inspector UI shows:
+- All registered tools with their parameter schemas
+- Resources and prompts
+- Raw JSON-RPC message exchange
+- Real-time response output
+
+### CLI mode
+
+Add `--cli` to run the Inspector without a browser. This is useful in CI/CD pipelines:
+
+```bash
+# List all tools
+npx @modelcontextprotocol/inspector --cli node build/index.js --method tools/list
+
+# Call a specific tool
+npx @modelcontextprotocol/inspector --cli node build/index.js \
+  --method tools/call --tool-name add --tool-arg a=5 b=3
+```
+
+## Manual testing with curl
+
+For HTTP-based servers (Streamable HTTP transport), test endpoints directly with curl:
+
+```bash
+# Test server metadata
+curl http://localhost:3000/v1/metadata
+
+# Execute a tool
+curl -X POST http://localhost:3000/v1/tools/execute \
+  -H "Content-Type: application/json" \
+  -d '{"name": "add", "parameters": {"a": 2, "b": 2}}'
+```
+
+<Tip>
+curl commands can be scripted and run in CI pipelines, making them a fast complement to the Inspector for smoke tests.
+</Tip>
+
+## Unit testing
+
+Unit tests let you verify that individual tools produce the correct output without a running server. Use your language's standard testing framework.
+
+### Python (pytest)
+
+The MCP Python SDK provides `create_connected_server_and_client_session` for in-process testing:
+
+```python
+import pytest
+from mcp.server.fastmcp import FastMCP
+from mcp.shared.memory import (
+    create_connected_server_and_client_session as create_session,
+)
+
+pytestmark = pytest.mark.anyio
+
+async def test_list_tools_cursor_parameter():
+    """Test that the cursor parameter is accepted for list_tools."""
+    server = FastMCP("test")
+
+    @server.tool(name="test_tool_1")
+    async def test_tool_1() -> str:
+        """First test tool"""
+        return "Result 1"
+
+    @server.tool(name="test_tool_2")
+    async def test_tool_2() -> str:
+        """Second test tool"""
+        return "Result 2"
+
+    async with create_session(server._mcp_server) as client_session:
+        result = await client_session.list_tools()
+        assert len(result.tools) == 2
+
+        # Cursor parameter is accepted even if pagination isn't implemented
+        result2 = await client_session.list_tools(cursor=None)
+        assert len(result2.tools) == 2
+
+        result3 = await client_session.list_tools(cursor="some_cursor_value")
+        assert len(result3.tools) == 2
+```
+
+### Python: testing tool logic directly
+
+You can also test the tool functions directly, without MCP infrastructure:
+
+```python
+# test_calculator.py
+def test_calculator_functions():
+    from mcp_calculator_server import add, subtract, multiply, divide
+
+    assert add(5, 3) == 8
+    assert subtract(10, 4) == 6
+    assert multiply(7, 6) == 42
+    assert divide(15, 3) == 5.0
+
+    # Test error case
+    import pytest
+    with pytest.raises(ValueError, match="Cannot divide by zero"):
+        divide(10, 0)
+```
+
+Run the tests:
+
+```bash
+pytest test_calculator.py -v
+```
+
+## When to use each approach
+
+| Approach | Best for |
+|----------|----------|
+| Inspector (visual) | Interactive exploration during development |
+| Inspector (CLI) | CI/CD smoke tests and scripted validation |
+| curl | Quick HTTP endpoint checks; scripting |
+| Unit tests | Regression testing; testing edge cases |
+
+## Key takeaways
+
+- Use the **MCP Inspector** for interactive exploration and debugging during development.
+- Use **CLI mode** of the Inspector (`--cli`) in automated pipelines.
+- Write **unit tests** with your language's testing framework to catch regressions early.
+- All major MCP SDKs have similar testing utilities — the patterns shown in Python apply to other languages too.

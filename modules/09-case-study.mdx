@@ -1,0 +1,196 @@
+---
+title: "Module 9: Case Studies"
+description: "Real-world MCP implementations — travel agents, Azure DevOps automation, VS Code documentation integration, APIM servers, and the GitHub MCP Registry."
+---
+
+MCP is transforming how AI applications interact with data, tools, and services. This module presents concrete case studies that show how organizations are applying MCP to solve complex business challenges across enterprise integration, developer productivity, and ecosystem development.
+
+## Learning objectives
+
+By exploring these case studies, you will:
+
+- Understand how MCP solves specific business problems
+- Learn different integration patterns and architectural approaches
+- Recognize best practices for enterprise MCP implementations
+- Identify opportunities to apply similar patterns in your own projects
+
+## Featured case studies
+
+### 1. Azure AI Travel Agents — multi-agent reference implementation
+
+The [Azure AI Travel Agents](https://github.com/Azure-Samples/azure-ai-travel-agents) project is Microsoft's comprehensive reference solution for building a multi-agent, AI-powered travel planning application using MCP, Azure OpenAI, and Azure AI Search.
+
+**What it demonstrates:**
+- Multi-agent orchestration through MCP as the coordination layer
+- Enterprise data integration with Azure AI Search
+- Secure, scalable architecture using Azure services
+- Extensible tooling with reusable MCP components
+- Conversational user experience powered by Azure OpenAI
+
+The architecture shows how multiple specialized AI agents — each responsible for different aspects of travel planning — communicate through a standardized MCP interface, enabling them to share context and coordinate without tight coupling.
+
+### 2. Updating Azure DevOps items from YouTube data
+
+This case study demonstrates a practical MCP workflow for automating cross-system data synchronization. The implementation shows how MCP tools can:
+
+- Extract structured data from online platforms (YouTube)
+- Update work items in Azure DevOps
+- Create repeatable, auditable automation workflows
+- Integrate data across disparate systems without custom API code
+
+Even relatively simple MCP implementations can provide significant efficiency gains by automating routine tasks and improving data consistency across systems.
+
+**Resources:**
+- [Azure DevOps MCP Tool](https://github.com/microsoft/azure-devops-mcp)
+
+### 3. Real-time documentation retrieval with MCP
+
+This case study guides you through connecting a Python console client to an MCP server to retrieve and log real-time, context-aware Microsoft documentation.
+
+**What you'll learn:**
+- Connect to an MCP server using a Python client and the official MCP SDK
+- Use streaming HTTP clients for efficient, real-time data retrieval
+- Call documentation tools on the server and log responses to the console
+- Integrate up-to-date Microsoft documentation into your workflow without leaving the terminal
+
+The project includes a minimal working code sample and links to additional resources. See the [Microsoft Learn Docs MCP Server](https://github.com/MicrosoftDocs/mcp) repository for the full implementation.
+
+### 4. Interactive study plan generator web app
+
+This case study builds an interactive web application using Chainlit and MCP to generate personalized study plans for any topic. Users specify a subject (e.g., "AI-900 certification") and a study duration (e.g., 8 weeks), and the app provides a week-by-week breakdown.
+
+**Key elements:**
+- Conversational web app powered by Chainlit's chat interface
+- User-driven prompts for topic and duration selection
+- Week-by-week content recommendations using MCP
+- Real-time, adaptive responses in a chat UI
+
+This demonstrates how conversational AI and MCP combine to create dynamic, user-driven educational tools.
+
+### 5. In-editor docs with MCP server in VS Code
+
+This case study shows how to bring Microsoft Learn Docs directly into VS Code using an MCP server — eliminating browser tab switching.
+
+**Capabilities:**
+- Instantly search and read docs inside VS Code using the MCP panel or command palette
+- Reference documentation and insert links directly into README or course markdown files
+- Use GitHub Copilot and MCP together for AI-powered documentation and code workflows
+- Validate and enhance documentation with real-time feedback
+
+**Implementation includes:**
+- Example `.vscode/mcp.json` configuration for easy setup
+- Walkthrough of the in-editor experience
+- Tips for combining Copilot and MCP for maximum productivity
+
+<Note>
+  This scenario is ideal for course authors, documentation writers, and developers who want to stay focused in their editor while working with docs, Copilot, and validation tools — all powered by MCP.
+</Note>
+
+### 6. APIM MCP server creation
+
+This case study provides a step-by-step guide for creating an MCP server using Azure API Management (APIM).
+
+<Steps>
+  <Step title="Set up an MCP server in Azure API Management">
+    Configure APIM as the entry point for your MCP server, handling authentication, routing, and policy enforcement.
+  </Step>
+  <Step title="Expose API operations as MCP tools">
+    Transform existing APIM-managed APIs into MCP tools that AI models can discover and invoke.
+  </Step>
+  <Step title="Configure policies for rate limiting and security">
+    Apply APIM policies to enforce rate limits, validate tokens, and protect backend services.
+  </Step>
+  <Step title="Test with VS Code and GitHub Copilot">
+    Connect your MCP server to VS Code's Copilot agent mode and verify tool invocation end-to-end.
+  </Step>
+</Steps>
+
+**Resources:**
+- [Remote MCP APIM Functions Python](https://github.com/Azure-Samples/remote-mcp-apim-functions-python)
+
+### 7. GitHub MCP Registry — accelerating agentic integration
+
+The [GitHub MCP Registry](https://github.com/mcp), launched in September 2025, addresses the fragmented discovery and deployment of MCP servers across the ecosystem.
+
+**Problem it solves:**
+
+| Challenge | Before the registry | After the registry |
+|-----------|--------------------|-----------------|
+| Discoverability | Scattered across repositories | Centralized, searchable catalog |
+| Setup friction | Redundant questions across forums | One-click install via VS Code |
+| Trust | Unverified sources | Curated listings with community validation |
+| Standardization | Inconsistent quality and compatibility | Transparent configuration standards |
+
+**Solution architecture:**
+- **One-click install** integration via VS Code for streamlined setup
+- **Signal-over-noise sorting** by stars, activity, and community validation
+- **Direct integration** with GitHub Copilot and other MCP-compatible tools
+- **Open contribution model** enabling both community and enterprise partners to contribute
+
+**Business impact:**
+- Faster onboarding for tools like the Microsoft Learn MCP Server (streams official documentation directly into agents)
+- Improved productivity via specialized servers like `github-mcp-server` for natural language GitHub automation
+- Stronger ecosystem trust through curated listings
+
+<Tip>
+  For practitioners building agent lifecycle management and reproducible workflows, the MCP Registry provides modular agent deployment with standardized, registry-backed components.
+</Tip>
+
+## Cross-cutting patterns
+
+These case studies span multiple implementation dimensions:
+
+<CardGroup cols={2}>
+  <Card title="Enterprise integration" icon="building">
+    Azure API Management and Azure DevOps automation show how to connect MCP to enterprise-grade infrastructure.
+  </Card>
+  <Card title="Multi-agent orchestration" icon="robot">
+    The travel planning reference shows MCP as a coordination layer for specialized AI agents.
+  </Card>
+  <Card title="Developer productivity" icon="code">
+    VS Code integration and real-time documentation access remove friction from everyday development workflows.
+  </Card>
+  <Card title="Ecosystem development" icon="network-wired">
+    GitHub's MCP Registry demonstrates how infrastructure investments unlock adoption at scale.
+  </Card>
+  <Card title="Educational applications" icon="graduation-cap">
+    Interactive study plan generators show conversational AI combined with MCP for dynamic content.
+  </Card>
+</CardGroup>
+
+## Architectural insights
+
+Across all seven case studies, several patterns appear consistently:
+
+<AccordionGroup>
+  <Accordion title="MCP as a coordination layer">
+    In multi-agent and enterprise scenarios, MCP functions as the shared protocol that lets otherwise independent systems communicate — without requiring custom point-to-point integrations.
+  </Accordion>
+  <Accordion title="Leverage existing infrastructure">
+    The most successful implementations build on existing investments. Azure DevOps automation enhances existing workflows; APIM integration protects existing APIs.
+  </Accordion>
+  <Accordion title="Start with a specific, measurable problem">
+    Each case study starts with a concrete challenge — outdated AI knowledge, manual data sync, browser tab context switching — rather than MCP as a general solution looking for a problem.
+  </Accordion>
+  <Accordion title="Security by design">
+    Compliant deployments (healthcare, financial services, enterprise) implement authentication, authorization, audit logging, and data redaction from the start rather than retrofitting security later.
+  </Accordion>
+</AccordionGroup>
+
+## Additional resources
+
+- [Azure AI Travel Agents GitHub Repository](https://github.com/Azure-Samples/azure-ai-travel-agents)
+- [Azure DevOps MCP Tool](https://github.com/microsoft/azure-devops-mcp)
+- [Playwright MCP Tool](https://github.com/microsoft/playwright-mcp)
+- [Microsoft Docs MCP Server](https://github.com/MicrosoftDocs/mcp)
+- [GitHub MCP Registry](https://github.com/mcp)
+- [MCP Community Examples](https://github.com/microsoft/mcp)
+
+<CardGroup cols={2}>
+  <Card title="Next: AI Toolkit Workshop" icon="arrow-right" href="/modules/10-ai-toolkit-workshop">
+    Build MCP servers with AI Toolkit for VS Code
+  </Card>
+  <Card title="Back: Best Practices" icon="arrow-left" href="/modules/08-best-practices">
+    Review production-grade patterns for MCP servers
+  </Card>
+</CardGroup>

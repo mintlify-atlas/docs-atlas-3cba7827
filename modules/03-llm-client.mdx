@@ -1,0 +1,269 @@
+---
+title: "Client with LLM Integration"
+description: "Add an LLM to your MCP client so users interact through natural language instead of explicit API calls."
+---
+
+Users live in an agentic world — they want to type a prompt and get a result, not call specific tool names with exact parameter names. Adding an LLM to your client bridges that gap: the model decides which tool to call and with what arguments based on what the user asks.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Connect an MCP client to a language model (GitHub Models / OpenAI)
+- Convert MCP tool schemas to a format the LLM understands
+- Pass a user prompt to the LLM and route the resulting tool call back to the MCP server
+- Provide a seamless natural-language experience on top of any MCP server
+
+## How it works
+
+The flow has four steps:
+
+1. Connect to the MCP server and list its tools, resources, and prompts.
+2. Convert each tool's schema to the function-calling format the LLM expects.
+3. Send the user prompt to the LLM along with the tool definitions.
+4. If the LLM decides to call a tool, forward that call to the MCP server and return the result.
+
+## Prerequisites: GitHub token
+
+The examples below use GitHub Models as the LLM backend. You need a GitHub Personal Access Token with the **Models** permission:
+
+1. Go to **GitHub Settings → Developer Settings → Fine-grained tokens**.
+2. Click **Generate new token**, add a note, set an expiry, and enable the **Models** permission.
+3. Copy the token and export it: `export GITHUB_TOKEN=<your-token>`
+
+## Exercise: Building the LLM client
+
+<Steps>
+  <Step title="Connect to the server and set up the LLM">
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+        import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+        import OpenAI from "openai";
+        import { z } from "zod";
+
+        class MCPClient {
+          private openai: OpenAI;
+          private client: Client;
+
+          constructor() {
+            this.openai = new OpenAI({
+              baseURL: "https://models.inference.ai.azure.com",
+              apiKey: process.env.GITHUB_TOKEN,
+            });
+            this.client = new Client(
+              { name: "example-client", version: "1.0.0" },
+              { capabilities: { prompts: {}, resources: {}, tools: {} } }
+            );
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        from azure.ai.inference import ChatCompletionsClient
+        from azure.core.credentials import AzureKeyCredential
+        import os, json
+
+        server_params = StdioServerParameters(
+            command="mcp",
+            args=["run", "server.py"],
+        )
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```xml
+        <!-- Add to pom.xml -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-mcp</artifactId>
+            <version>1.0.0-beta3</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-github-models</artifactId>
+            <version>1.0.0-beta3</version>
+        </dependency>
+        ```
+
+        ```java
+        ChatLanguageModel model = OpenAiOfficialChatModel.builder()
+            .isGitHubModels(true)
+            .apiKey(System.getenv("GITHUB_TOKEN"))
+            .timeout(Duration.ofSeconds(60))
+            .modelName("gpt-4.1-nano")
+            .build();
+
+        McpTransport transport = new HttpMcpTransport.Builder()
+            .sseUrl("http://localhost:8080/sse")
+            .timeout(Duration.ofSeconds(60))
+            .build();
+
+        McpClient mcpClient = new DefaultMcpClient.Builder()
+            .transport(transport)
+            .build();
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Convert MCP tools to LLM format">
+    The LLM expects tools in a specific JSON schema format. You need to map each MCP tool response into that structure.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        openAiToolAdapter(tool: { name: string; description?: string; input_schema: any }) {
+          return {
+            type: "function" as const,
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: {
+                type: "object",
+                properties: tool.input_schema.properties,
+                required: tool.input_schema.required,
+              },
+            },
+          };
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        def convert_to_llm_tool(tool):
+            return {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "type": "function",
+                    "parameters": {
+                        "type": "object",
+                        "properties": tool.inputSchema["properties"]
+                    }
+                }
+            }
+
+        # Convert all tools
+        functions = [convert_to_llm_tool(t) for t in tools.tools]
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java
+        // LangChain4j handles conversion automatically
+        ToolProvider toolProvider = McpToolProvider.builder()
+            .mcpClients(List.of(mcpClient))
+            .build();
+
+        public interface Bot { String chat(String prompt); }
+
+        Bot bot = AiServices.builder(Bot.class)
+            .chatLanguageModel(model)
+            .toolProvider(toolProvider)
+            .build();
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Handle user prompts with tool calls">
+    Send the user's message to the LLM, check whether it decides to call a tool, then forward that call to the MCP server.
+
+    <Tabs>
+      <Tab title="TypeScript">
+        ```typescript
+        async run() {
+          const toolsResult = await this.client.listTools();
+          const tools = toolsResult.tools.map((tool) =>
+            this.openAiToolAdapter({
+              name: tool.name,
+              description: tool.description,
+              input_schema: tool.inputSchema,
+            })
+          );
+
+          const messages = [{ role: "user" as const, content: "What is the sum of 2 and 3?" }];
+
+          const response = await this.openai.chat.completions.create({
+            model: "gpt-4.1-mini",
+            max_tokens: 1000,
+            messages,
+            tools,
+          });
+
+          for (const choice of response.choices) {
+            if (choice.message.tool_calls) {
+              for (const tool_call of choice.message.tool_calls) {
+                const toolResult = await this.client.callTool({
+                  name: tool_call.function.name,
+                  arguments: JSON.parse(tool_call.function.arguments),
+                });
+                console.log("Tool result:", toolResult);
+              }
+            }
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        def call_llm(prompt, functions):
+            token = os.environ["GITHUB_TOKEN"]
+            client = ChatCompletionsClient(
+                endpoint="https://models.inference.ai.azure.com",
+                credential=AzureKeyCredential(token),
+            )
+            response = client.complete(
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user",   "content": prompt},
+                ],
+                model="gpt-4o",
+                tools=functions,
+                temperature=1.0,
+                max_tokens=1000,
+            )
+            functions_to_call = []
+            if response.choices[0].message.tool_calls:
+                for tc in response.choices[0].message.tool_calls:
+                    functions_to_call.append({
+                        "name": tc.function.name,
+                        "args": json.loads(tc.function.arguments)
+                    })
+            return functions_to_call
+
+        # Call the LLM and execute suggested tools
+        prompt = "Add 2 to 20"
+        for f in call_llm(prompt, functions):
+            result = await session.call_tool(f["name"], arguments=f["args"])
+            print("TOOLS result:", result.content)
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java
+        // LangChain4j handles tool dispatch automatically
+        String response = bot.chat("Calculate the sum of 24.5 and 17.3");
+        System.out.println(response);
+
+        response = bot.chat("What's the square root of 144?");
+        System.out.println(response);
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Assignment
+
+Build out the server with more tools, then create a client with an LLM and test it with different prompts to make sure all your server tools get called dynamically. This way of building a client means the end user has a great experience because they use prompts — instead of exact client commands — and remain unaware of any MCP server being called.
+
+## Key takeaways
+
+- Adding an LLM to your client provides a far better experience for users compared to explicit tool calls.
+- You need to convert MCP tool schemas to the function-calling format each LLM expects.
+- The LLM acts as a natural-language router: it decides which tool to call and with what arguments.
+- Frameworks like LangChain4j (Java) handle tool conversion and dispatch automatically.

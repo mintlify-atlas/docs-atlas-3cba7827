@@ -1,0 +1,281 @@
+---
+title: Java Samples
+description: MCP server samples in Java using Spring AI and Spring Boot — from a basic calculator with SSE transport to an advanced content-safety application.
+---
+
+The Java samples use [Spring AI's MCP Server Boot Starter](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-server-boot-starter-docs.html) and WebFlux for reactive SSE transport. Tools are registered declaratively with the `@Tool` annotation.
+
+<Tabs>
+  <Tab title="Basic (SSE)">
+    ## Basic calculator server
+
+    Located at `03-GettingStarted/samples/java/calculator`, this Spring Boot application exposes a full-featured calculator through MCP over SSE.
+
+    <Steps>
+      <Step title="Clone and navigate">
+        ```bash
+        git clone https://github.com/microsoft/mcp-for-beginners.git
+        cd mcp-for-beginners/03-GettingStarted/samples/java/calculator
+        ```
+      </Step>
+      <Step title="Build the project">
+        ```bash
+        ./mvnw clean install -DskipTests
+        ```
+      </Step>
+      <Step title="Run the server">
+        ```bash
+        java -jar target/calculator-server-0.0.1-SNAPSHOT.jar
+        ```
+
+        The server starts on `http://localhost:8080`. The SSE endpoint is at `/sse`.
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    <CodeGroup>
+      ```java McpServerApplication.java
+      package com.microsoft.mcp.sample.server;
+
+      import org.springframework.ai.tool.ToolCallbackProvider;
+      import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+      import org.springframework.boot.SpringApplication;
+      import org.springframework.boot.autoconfigure.SpringBootApplication;
+      import org.springframework.context.annotation.Bean;
+
+      @SpringBootApplication
+      public class McpServerApplication {
+
+          public static void main(String[] args) {
+              SpringApplication.run(McpServerApplication.class, args);
+          }
+
+          @Bean
+          public ToolCallbackProvider calculatorTools(CalculatorService calculator) {
+              return MethodToolCallbackProvider.builder().toolObjects(calculator).build();
+          }
+      }
+      ```
+
+      ```java CalculatorService.java
+      package com.microsoft.mcp.sample.server.service;
+
+      import org.springframework.ai.tool.annotation.Tool;
+      import org.springframework.stereotype.Service;
+
+      @Service
+      public class CalculatorService {
+
+          @Tool(description = "Add two numbers together")
+          public String add(double a, double b) {
+              double result = a + b;
+              return formatResult(a, "+", b, result);
+          }
+
+          @Tool(description = "Subtract the second number from the first number")
+          public String subtract(double a, double b) {
+              double result = a - b;
+              return formatResult(a, "-", b, result);
+          }
+
+          @Tool(description = "Multiply two numbers together")
+          public String multiply(double a, double b) {
+              double result = a * b;
+              return formatResult(a, "*", b, result);
+          }
+
+          @Tool(description = "Divide the first number by the second number")
+          public String divide(double a, double b) {
+              if (b == 0) return "Error: Cannot divide by zero";
+              double result = a / b;
+              return formatResult(a, "/", b, result);
+          }
+
+          @Tool(description = "Calculate the power of a number (base raised to an exponent)")
+          public String power(double base, double exponent) {
+              double result = Math.pow(base, exponent);
+              return formatResult(base, "^", exponent, result);
+          }
+
+          @Tool(description = "Calculate the square root of a number")
+          public String squareRoot(double number) {
+              if (number < 0)
+                  return "Error: Cannot calculate square root of a negative number";
+              return String.format("\u221a%.2f = %.2f", number, Math.sqrt(number));
+          }
+
+          @Tool(description = "Calculate the remainder when one number is divided by another")
+          public String modulus(double a, double b) {
+              if (b == 0) return "Error: Cannot divide by zero";
+              return formatResult(a, "%", b, a % b);
+          }
+
+          @Tool(description = "Calculate the absolute value of a number")
+          public String absolute(double number) {
+              return String.format("|%.2f| = %.2f", number, Math.abs(number));
+          }
+
+          @Tool(description = "Get help about available calculator operations")
+          public String help() {
+              return "Available: add, subtract, multiply, divide, power, squareRoot, modulus, absolute";
+          }
+
+          private String formatResult(double a, String op, double b, double result) {
+              return String.format("%.2f %s %.2f = %.2f", a, op, b, result);
+          }
+      }
+      ```
+    </CodeGroup>
+
+    ### Client code (MCP SDK)
+
+    ```java SDKClient.java
+    import io.modelcontextprotocol.client.McpClient;
+    import io.modelcontextprotocol.client.transport.WebFluxSseClientTransport;
+    import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
+    import org.springframework.web.reactive.function.client.WebClient;
+
+    public class SDKClient {
+        public static void main(String[] args) {
+            var transport = new WebFluxSseClientTransport(
+                WebClient.builder().baseUrl("http://localhost:8080")
+            );
+            var client = McpClient.sync(transport).build();
+            client.initialize();
+
+            // List available tools
+            System.out.println(client.listTools());
+
+            // Call the add tool
+            var result = client.callTool(
+                new CallToolRequest("add", Map.of("a", 5.0, "b", 3.0))
+            );
+            System.out.println("5 + 3 = " + result);
+
+            // Call squareRoot
+            var sqrt = client.callTool(
+                new CallToolRequest("squareRoot", Map.of("number", 16.0))
+            );
+            System.out.println("√16 = " + sqrt);
+
+            client.closeGracefully();
+        }
+    }
+    ```
+
+    ### LangChain4j client with GitHub models
+
+    The sample also includes a `LangChain4jClient` that connects an AI model to the calculator through MCP:
+
+    ```java LangChain4jClient.java (excerpt)
+    ChatLanguageModel model = GitHubChatModel.builder()
+        .apiKey(System.getenv("GITHUB_TOKEN"))
+        .timeout(Duration.ofSeconds(60))
+        .modelName("phi-4")
+        .logRequests(true)
+        .logResponses(true)
+        .build();
+    ```
+
+    Set your token before running:
+
+    ```bash
+    export GITHUB_TOKEN=your-github-personal-access-token
+    ```
+
+    ### Test with MCP Inspector
+
+    <Steps>
+      <Step title="Start the Inspector">
+        ```bash
+        npx @modelcontextprotocol/inspector
+        ```
+      </Step>
+      <Step title="Connect via SSE">
+        - Transport type: **SSE**
+        - URL: `http://localhost:8080/sse`
+        - Click **Connect**, then **List Tools**
+      </Step>
+    </Steps>
+
+    ### Run in Docker
+
+    ```bash
+    docker build -t calculator-mcp-service .
+    docker run -p 8080:8080 calculator-mcp-service
+    ```
+
+    The Dockerfile uses a multi-stage build with Maven 3.9.9 and Eclipse Temurin 24 JDK.
+
+    ### Key Maven dependencies
+
+    ```xml pom.xml (excerpt)
+    <!-- MCP Server over SSE -->
+    <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-starter-mcp-server-webflux</artifactId>
+    </dependency>
+
+    <!-- LangChain4j MCP integration -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-mcp</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!-- GitHub model support -->
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-github</artifactId>
+        <version>${langchain4j.version}</version>
+    </dependency>
+    ```
+  </Tab>
+
+  <Tab title="Advanced (Container App)">
+    ## Advanced: content safety + LangChain4j
+
+    Located at `04-PracticalImplementation/samples/java/containerapp`, this Spring Boot web application wraps the calculator MCP server with dual-layer Azure Content Safety screening.
+
+    ### Architecture
+
+    1. User submits a calculation prompt via a web UI
+    2. **Input screening** — Azure Content Safety checks the prompt
+    3. If safe, LangChain4j sends the prompt to the calculator MCP server
+    4. **Output screening** — Azure Content Safety checks the model's response
+    5. Safe responses are displayed; flagged responses are replaced with a warning
+
+    ### Setup
+
+    <Steps>
+      <Step title="Create an Azure Content Safety resource">
+        In the Azure Portal, create a **Content Safety** resource and copy its endpoint and key.
+      </Step>
+      <Step title="Set environment variables">
+        ```bash
+        export GITHUB_TOKEN=<your_github_token>
+        export CONTENT_SAFETY_ENDPOINT=<your_endpoint>
+        export CONTENT_SAFETY_KEY=<your_key>
+        ```
+      </Step>
+      <Step title="Start the calculator MCP server">
+        Start the basic calculator server (see the Basic tab) on `localhost:8080` before starting this app.
+      </Step>
+      <Step title="Run the container app">
+        ```bash
+        mvn spring-boot:run
+        ```
+
+        Open `http://localhost:8087` in your browser.
+      </Step>
+    </Steps>
+
+    ### Features
+
+    - Dual-layer content safety (input + output)
+    - LangChain4j integration with GitHub's `gpt-4.1-nano` model
+    - SSE transport to the calculator MCP server
+    - Color-coded safety indicators in the web UI
+  </Tab>
+</Tabs>

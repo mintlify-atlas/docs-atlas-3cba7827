@@ -1,0 +1,268 @@
+---
+title: Python Samples
+description: MCP server samples in Python using FastMCP — from a minimal four-tool calculator to a full server/client pair with tools, resources, and prompts.
+---
+
+The Python samples use [FastMCP](https://github.com/modelcontextprotocol/python-sdk), a high-level decorator-based API that makes it straightforward to define tools, resources, and prompts with minimal boilerplate.
+
+<Tabs>
+  <Tab title="Basic (stdio)">
+    ## Basic calculator server
+
+    Located at `03-GettingStarted/samples/python`, this is a minimal MCP server with four calculator tools.
+
+    <Steps>
+      <Step title="Clone and navigate">
+        ```bash
+        git clone https://github.com/microsoft/mcp-for-beginners.git
+        cd mcp-for-beginners/03-GettingStarted/samples/python
+        ```
+      </Step>
+      <Step title="Install dependencies">
+        ```bash
+        pip install -r requirements.txt
+        ```
+
+        Or install directly:
+
+        ```bash
+        pip install mcp>=1.26.0
+        ```
+      </Step>
+      <Step title="Run the server">
+        ```bash
+        python mcp_calculator_server.py
+        ```
+
+        <Note>
+          When run directly in a terminal you will see JSON-RPC validation errors — this is expected. The server waits for properly formatted MCP client messages on stdin.
+        </Note>
+      </Step>
+      <Step title="Test the functions (optional)">
+        ```bash
+        python test_calculator.py
+        ```
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    ```python mcp_calculator_server.py
+    #!/usr/bin/env python3
+    """Sample MCP Calculator Server implementation in Python."""
+
+    from mcp.server.fastmcp import FastMCP
+
+    # Create a FastMCP server
+    mcp = FastMCP("Calculator MCP Server")
+
+    @mcp.tool()
+    def add(a: float, b: float) -> float:
+        """Add two numbers together and return the result."""
+        return a + b
+
+    @mcp.tool()
+    def subtract(a: float, b: float) -> float:
+        """Subtract b from a and return the result."""
+        return a - b
+
+    @mcp.tool()
+    def multiply(a: float, b: float) -> float:
+        """Multiply two numbers together and return the result."""
+        return a * b
+
+    @mcp.tool()
+    def divide(a: float, b: float) -> float:
+        """
+        Divide a by b and return the result.
+
+        Raises:
+            ValueError: If b is zero
+        """
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        return a / b
+
+    if __name__ == "__main__":
+        mcp.run()
+    ```
+
+    FastMCP reads type hints and docstrings to automatically generate the MCP tool schema — no manual JSON schema required.
+
+    ### Test script
+
+    ```python test_calculator.py
+    from mcp_calculator_server import add, subtract, multiply, divide
+
+    def test_calculator_functions():
+        assert add(5, 3) == 8
+        print("Addition: OK")
+
+        assert subtract(10, 4) == 6
+        print("Subtraction: OK")
+
+        assert multiply(7, 6) == 42
+        print("Multiplication: OK")
+
+        assert divide(15, 3) == 5
+        print("Division: OK")
+
+        try:
+            divide(10, 0)
+        except ValueError as e:
+            assert str(e) == "Cannot divide by zero"
+            print("Divide-by-zero guard: OK")
+
+    test_calculator_functions()
+    ```
+  </Tab>
+
+  <Tab title="Advanced">
+    ## Advanced server + client pair
+
+    Located at `04-PracticalImplementation/samples/python`, this sample demonstrates all three MCP primitives — **tools**, **resources**, and **prompts** — along with a matching async client.
+
+    <Steps>
+      <Step title="Navigate to the advanced sample">
+        ```bash
+        cd 04-PracticalImplementation/samples/python
+        ```
+      </Step>
+      <Step title="Install dependencies">
+        ```bash
+        pip install mcp-server mcp-client
+        ```
+      </Step>
+      <Step title="Start the server (terminal 1)">
+        ```bash
+        python server.py
+        ```
+
+        You can also use the MCP CLI in development mode:
+
+        ```bash
+        mcp dev server.py
+        ```
+      </Step>
+      <Step title="Run the client (terminal 2)">
+        ```bash
+        python client.py
+        ```
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    <CodeGroup>
+      ```python server.py — tools
+      from mcp.server.fastmcp import FastMCP
+      import logging, json
+
+      logging.basicConfig(level=logging.INFO)
+      logger = logging.getLogger(__name__)
+
+      AVAILABLE_MODELS = ["gpt-4", "llama-3-70b", "claude-3-sonnet"]
+      mcp = FastMCP("Python MCP Demo Server")
+
+      @mcp.tool()
+      def completion(model: str, prompt: str, temperature: float = 0.7, max_tokens: int = 100) -> str:
+          """Generate completions using AI models."""
+          if model not in AVAILABLE_MODELS:
+              raise ValueError(f"Model {model} not supported")
+          return f"Simulated response to: {prompt[:30]}..."
+
+      @mcp.tool()
+      def add(a: int, b: int) -> int:
+          """Add two numbers together."""
+          logger.info(f"Adding {a} and {b}")
+          return a + b
+      ```
+
+      ```python server.py — resources
+      @mcp.resource("models://")
+      def get_models() -> str:
+          """Get information about available AI models."""
+          models_data = [
+              {"id": "gpt-4", "name": "GPT-4", "description": "OpenAI's GPT-4 model"},
+              {"id": "llama-3-70b", "name": "LLaMA 3 (70B)", "description": "Meta's LLaMA 3"},
+              {"id": "claude-3-sonnet", "name": "Claude 3 Sonnet", "description": "Anthropic's Claude 3"}
+          ]
+          return json.dumps({"models": models_data})
+
+      @mcp.resource("greeting://{name}")
+      def get_greeting(name: str) -> str:
+          """Return a personalized greeting."""
+          import urllib.parse
+          decoded_name = urllib.parse.unquote(name)
+          return f"Hello, {decoded_name}!"
+      ```
+
+      ```python server.py — prompts
+      @mcp.prompt()
+      def review_code(code: str) -> str:
+          """Provide a template for reviewing code."""
+          return (
+              f"Please review this code and provide feedback on best practices, "
+              f"potential bugs, and improvements:\n\n```\n{code}\n```"
+          )
+      ```
+    </CodeGroup>
+
+    ### Client code
+
+    ```python client.py
+    import asyncio, json, urllib.parse
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    from mcp.types import TextContent, TextResourceContents
+
+    async def main():
+        server_params = StdioServerParameters(command="python", args=["server.py"])
+
+        async with stdio_client(server_params) as (reader, writer):
+            async with ClientSession(reader, writer) as session:
+                await session.initialize()
+
+                # 1. Call the add tool
+                result = await session.call_tool("add", arguments={"a": 5, "b": 7})
+                print(f"5 + 7 = {result.content[0].text}")
+
+                # 2. Call the completion tool
+                comp = await session.call_tool(
+                    "completion",
+                    arguments={"model": "gpt-4", "prompt": "What is the meaning of life?"}
+                )
+                print(f"Completion: {comp.content[0].text}")
+
+                # 3. Read the models resource
+                models_resp = await session.read_resource("models://")
+                models = json.loads(models_resp.contents[0].text)
+                for m in models["models"]:
+                    print(f"  - {m['name']}")
+
+                # 4. Read a greeting resource
+                name = urllib.parse.quote("MCP Explorer")
+                greeting = await session.read_resource(f"greeting://{name}")
+                print(greeting.contents[0].text)
+
+                # 5. Use the code review prompt
+                prompt = await session.get_prompt(
+                    "review_code",
+                    {"code": "def hello():\n    print('hi')"}
+                )
+                print(prompt.messages[0].content.text)
+
+    asyncio.run(main())
+    ```
+
+    ### What this sample demonstrates
+
+    | Primitive | Example |
+    |-----------|--------|
+    | Tool | `add(a, b)` — callable function with return value |
+    | Tool | `completion(model, prompt)` — simulated AI model call |
+    | Resource | `models://` — static data exposed as a URI |
+    | Resource | `greeting://{name}` — dynamic resource with URI template parameter |
+    | Prompt | `review_code(code)` — reusable prompt template |
+  </Tab>
+</Tabs>

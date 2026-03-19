@@ -1,0 +1,235 @@
+---
+title: "HTTP Streaming"
+description: "Use Streamable HTTP — the recommended transport for remote MCP servers — to send real-time progress notifications to clients."
+---
+
+Streamable HTTP is the recommended transport for remote MCP servers (MCP Specification 2025-11-25). It enables real-time progress notifications via a structured JSON-RPC notification system, making it ideal for cloud deployments, multi-client scenarios, and long-running AI tasks.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Explain the difference between classic HTTP streaming and MCP streaming notifications
+- Implement a server that sends progress notifications using Streamable HTTP
+- Write a client that handles incoming notifications in real time
+- Understand the security considerations for HTTP-based MCP servers
+
+## Transport comparison
+
+| Transport | Real-time updates | Streaming | Scalability | Recommended for |
+|-----------|------------------|-----------|-------------|------------------|
+| stdio | No | No | Low | Local CLI tools |
+| SSE (deprecated) | Yes | Yes | Medium | — |
+| Streamable HTTP | Yes | Yes | High | Cloud, multi-client |
+
+## Classic streaming vs. MCP streaming
+
+MCP streaming is **not** about chunked HTTP responses. Instead it uses a structured **notification** system:
+
+| Feature | Classic HTTP streaming | MCP streaming (notifications) |
+|---------|----------------------|--------------------------------|
+| Main response | Chunked | Single, at end |
+| Progress updates | Sent as data chunks | Sent as separate notifications |
+| Client requirements | Process stream | Implement message handler |
+| Message format | Plain text chunks | Structured JSON-RPC objects |
+
+## What is an MCP notification?
+
+A notification is a JSON-RPC message the server sends to the client to report progress during a long-running operation:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/message",
+  "params": {
+    "level": "info",
+    "data": "Processing document 3/10"
+  }
+}
+```
+
+### Notification levels
+
+| Level | Description | Example use case |
+|-------|-------------|------------------|
+| `debug` | Detailed debugging info | Function entry/exit |
+| `info` | General progress | Operation progress updates |
+| `notice` | Normal but significant events | Configuration changes |
+| `warning` | Warning conditions | Deprecated feature usage |
+| `error` | Error conditions | Operation failures |
+| `critical` | Critical conditions | System component failures |
+
+## Implementing notifications
+
+### Server side: sending notifications
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from mcp.server.fastmcp import FastMCP, Context
+    from mcp.types import TextContent
+
+    mcp = FastMCP("streaming-server")
+
+    @mcp.tool(description="A tool that sends progress notifications")
+    async def process_files(message: str, ctx: Context) -> TextContent:
+        for i in range(1, 11):
+            await ctx.info(f"Processing document {i}/10")
+        await ctx.info("Processing complete!")
+        return TextContent(type="text", text=f"Done: {message}")
+
+    # Use streamable-http transport
+    mcp.run(transport="streamable-http")
+    ```
+  </Tab>
+  <Tab title=".NET">
+    ```csharp
+    [Tool("A tool that sends progress notifications")]
+    public async Task<TextContent> ProcessFiles(string message, ToolContext ctx)
+    {
+        await ctx.Info("Processing file 1/3...");
+        await ctx.Info("Processing file 2/3...");
+        await ctx.Info("Processing file 3/3...");
+        return new TextContent { Type = "text", Text = $"Done: {message}" };
+    }
+    ```
+
+    Enable Streamable HTTP in your server setup:
+
+    ```csharp
+    var builder = McpBuilder.Create();
+    await builder
+        .UseStreamableHttp()
+        .Build()
+        .RunAsync();
+    ```
+  </Tab>
+</Tabs>
+
+### Client side: receiving notifications
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    async def message_handler(message):
+        if isinstance(message, types.ServerNotification):
+            print("NOTIFICATION:", message)
+        else:
+            print("SERVER MESSAGE:", message)
+
+    async with ClientSession(
+        read_stream,
+        write_stream,
+        logging_callback=logging_collector,
+        message_handler=message_handler,
+    ) as session:
+        await session.initialize()
+        result = await session.call_tool("process_files", {"message": "batch-1"})
+    ```
+  </Tab>
+  <Tab title=".NET">
+    ```csharp
+    void MessageHandler(IJsonRpcMessage message)
+    {
+        if (message is ServerNotification notification)
+            Console.WriteLine($"NOTIFICATION: {notification}");
+        else
+            Console.WriteLine($"SERVER MESSAGE: {message}");
+    }
+
+    var clientOptions = new ClientSessionOptions
+    {
+        MessageHandler = MessageHandler,
+        LoggingCallback = (level, msg) => Console.WriteLine($"[{level}] {msg}")
+    };
+
+    using var client = new ClientSession(readStream, writeStream, clientOptions);
+    await client.InitializeAsync();
+    ```
+  </Tab>
+</Tabs>
+
+## A simple HTTP streaming example
+
+To understand the mechanics before using MCP's notification layer, here is a plain HTTP streaming server and client:
+
+<CodeGroup>
+
+```python Server (FastAPI)
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import time
+
+app = FastAPI()
+
+async def event_stream():
+    for i in range(1, 6):
+        yield f"data: Message {i}\n\n"
+        time.sleep(1)
+
+@app.get("/stream")
+def stream():
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+```
+
+```python Client (requests)
+import requests
+
+with requests.get("http://localhost:8000/stream", stream=True) as r:
+    for line in r.iter_lines():
+        if line:
+            print(line.decode())
+```
+
+</CodeGroup>
+
+## Security considerations
+
+When you expose an MCP server over HTTP, you must address the following:
+
+<Accordion title="Origin header validation">
+  Always validate the `Origin` header to prevent DNS rebinding attacks. Reject requests from unexpected origins.
+</Accordion>
+
+<Accordion title="Localhost binding for development">
+  During local development, bind servers to `localhost` (127.0.0.1) only. Never expose a development server on `0.0.0.0`.
+</Accordion>
+
+<Accordion title="Authentication for production">
+  Implement authentication for any publicly accessible server — API keys, OAuth 2.0, or JWT tokens. Never deploy an unauthenticated HTTP MCP server to the public internet.
+</Accordion>
+
+<Accordion title="CORS configuration">
+  Configure Cross-Origin Resource Sharing (CORS) policies to restrict which origins can connect to your server.
+</Accordion>
+
+<Accordion title="HTTPS in production">
+  Use HTTPS to encrypt traffic. Consider a reverse proxy (nginx, Caddy) to handle TLS termination.
+</Accordion>
+
+## Migrating from SSE to Streamable HTTP
+
+If you have an existing SSE-based server:
+
+1. Update server code to use `transport="streamable-http"` in `mcp.run()`.
+2. Update client code to use `streamablehttp_client` instead of the SSE client.
+3. Implement a `message_handler` in the client to process notifications.
+4. Test with existing tools and workflows.
+5. Optionally run both SSE and Streamable HTTP in parallel on different endpoints during the transition.
+
+## Assignment
+
+Build an MCP server and client where the server processes a list of items (e.g., files or documents) and sends a progress notification for each item. The client should display each notification as it arrives.
+
+**Steps:**
+1. Implement a server tool that processes a list and calls `ctx.info()` for each item.
+2. Run the server with `transport="streamable-http"`.
+3. Write a client with a `message_handler` that prints notifications.
+4. Observe the real-time output.
+
+## Key takeaways
+
+- Streamable HTTP is the recommended transport for remote MCP servers (MCP spec 2025-11-25).
+- MCP streaming uses a **notification** system — the final result is still a single response, but progress is sent as separate messages.
+- Always validate the `Origin` header and use HTTPS in production deployments.
+- Migrating from the deprecated SSE transport to Streamable HTTP requires only minor changes to both server and client.

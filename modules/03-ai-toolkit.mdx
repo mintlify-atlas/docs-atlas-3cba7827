@@ -1,0 +1,165 @@
+---
+title: "AI Toolkit Integration"
+description: "Use the AI Toolkit VS Code extension to build, connect, and test an MCP-powered agent with natural language math capabilities."
+---
+
+The [AI Toolkit](https://aka.ms/AIToolkit) extension for Visual Studio Code streamlines agent development. It includes an **Agent (Prompt) Builder** that lets you wire up MCP servers to a language model and test tool invocation with natural-language prompts — all without leaving the editor.
+
+<Info>
+The AI Toolkit currently supports **Python** and **TypeScript** MCP servers.
+</Info>
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Consume an MCP server from the AI Toolkit Agent Builder
+- Configure an agent with a system prompt and model
+- Use MCP tools via natural-language prompts
+- Add new tools to an MCP server and reload the agent
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Visual Studio Code" icon="code" href="https://code.visualstudio.com/">
+    Download and install VS Code if you haven't already.
+  </Card>
+  <Card title="AI Toolkit extension" icon="puzzle-piece" href="https://aka.ms/AIToolkit">
+    Install AI Toolkit from the VS Code Marketplace.
+  </Card>
+</CardGroup>
+
+<Warning>
+If you are on **macOS**, there is a known issue with dependency installation. Check the AI Toolkit docs for the latest status before starting this exercise.
+</Warning>
+
+## Exercise: Building a calculator agent
+
+<Steps>
+  <Step title="Add the GPT-4o model to AI Toolkit">
+    1. Open the **AI Toolkit** extension from the Activity Bar.
+    2. In the **Catalog** section, select **Models** to open the Model Catalog.
+    3. Search for **OpenAI GPT-4o** and click **+ Add** — make sure to select the **GitHub-hosted** variant.
+    4. Confirm the model appears in **My Models** in the Activity Bar.
+  </Step>
+
+  <Step title="Create an agent">
+    1. In the AI Toolkit **Tools** section, select **Agent (Prompt) Builder**.
+    2. Click **+ New Agent** and enter the name **Calculator Agent**.
+    3. For the **Model** field, select **OpenAI GPT-4o (via GitHub)**.
+  </Step>
+
+  <Step title="Generate a system prompt">
+    1. Click the **Generate system prompt** button.
+    2. In the **Generate a prompt** window, enter:
+
+       ```text
+       You are a helpful and efficient math assistant. When given a problem
+       involving basic arithmetic, you respond with the correct result.
+       ```
+
+    3. Click **Generate**. The system prompt will appear in the **System prompt** field.
+    4. Review and modify the prompt if needed.
+  </Step>
+
+  <Step title="Create the calculator MCP server">
+    1. In the **Tools** section of the Agent Builder, click **+ MCP Server**.
+    2. Select **+ Add Server → Create a New MCP Server**.
+    3. Choose the **python-weather** template.
+    4. Select **Default folder** as the save location.
+    5. Name the server **Calculator**.
+    6. A new VS Code window opens. Select **Yes, I trust the authors**.
+    7. In the terminal, create and activate a virtual environment:
+
+       ```bash
+       python -m venv .venv
+       # Windows:
+       .venv\Scripts\activate
+       # macOS/Linux:
+       source .venv/bin/activate
+       ```
+
+    8. Install the dependencies:
+
+       ```bash
+       pip install -e .[dev]
+       ```
+
+    9. Open **src/server.py** and replace its contents with the calculator implementation:
+
+       ```python
+       """
+       Sample MCP Calculator Server implementation in Python.
+       Provides basic arithmetic operations: add, subtract, multiply, divide.
+       """
+       from mcp.server.fastmcp import FastMCP
+
+       server = FastMCP("calculator")
+
+       @server.tool()
+       def add(a: float, b: float) -> float:
+           """Add two numbers together and return the result."""
+           return a + b
+
+       @server.tool()
+       def subtract(a: float, b: float) -> float:
+           """Subtract b from a and return the result."""
+           return a - b
+
+       @server.tool()
+       def multiply(a: float, b: float) -> float:
+           """Multiply two numbers together and return the result."""
+           return a * b
+
+       @server.tool()
+       def divide(a: float, b: float) -> float:
+           """Divide a by b. Raises ValueError if b is zero."""
+           if b == 0:
+               raise ValueError("Cannot divide by zero")
+           return a / b
+       ```
+  </Step>
+
+  <Step title="Run the agent">
+    1. Press **F5** to start debugging the MCP server. The Agent Builder opens.
+    2. In the **User prompt** field, enter:
+
+       ```text
+       I bought 3 items priced at $25 each, and then used a $20 discount.
+       How much did I pay?
+       ```
+
+    3. Click **Run**. The agent should respond that you paid **$55**.
+    4. Inspect the **Tool Response** panel to see the individual tool calls:
+       - `multiply(3, 25)` → 75
+       - `subtract(75, 20)` → 55
+    5. Try more prompts to exercise additional tools.
+    6. When finished, stop the server with **Ctrl/Cmd+C** in the terminal.
+  </Step>
+</Steps>
+
+## Assignment
+
+Add a `square_root` tool to `server.py`:
+
+```python
+import math
+
+@server.tool()
+def square_root(n: float) -> float:
+    """Return the square root of n. Raises ValueError for negative numbers."""
+    if n < 0:
+        raise ValueError("Cannot take square root of a negative number")
+    return math.sqrt(n)
+```
+
+Restart the server (**F5**) and submit prompts that exercise the new tool, such as:
+- "What is the square root of 225?"
+- "I need the square root of 16 plus 7."
+
+## Key takeaways
+
+- The AI Toolkit Agent Builder is a complete environment for building and testing MCP-powered agents.
+- You can add new tools to MCP servers at any time and reload the agent to pick them up.
+- The AI Toolkit includes Python and TypeScript templates to accelerate server creation.
+- Natural-language prompts trigger tool calls automatically — the LLM selects and invokes the right tools.

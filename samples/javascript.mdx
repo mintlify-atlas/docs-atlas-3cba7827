@@ -1,0 +1,241 @@
+---
+title: JavaScript Samples
+description: MCP server samples in JavaScript using the official MCP SDK — from a basic calculator with stdio transport to an advanced server with resources and event emitters.
+---
+
+The JavaScript samples use the [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) package and [Zod](https://zod.dev/) for schema validation. Both samples run with Node.js and use ES module syntax.
+
+<Tabs>
+  <Tab title="Basic (stdio)">
+    ## Basic calculator server
+
+    Located at `03-GettingStarted/samples/javascript`, this is the simplest possible MCP server — four arithmetic tools over a stdio transport.
+
+    <Steps>
+      <Step title="Clone and navigate">
+        ```bash
+        git clone https://github.com/microsoft/mcp-for-beginners.git
+        cd mcp-for-beginners/03-GettingStarted/samples/javascript
+        ```
+      </Step>
+      <Step title="Install dependencies">
+        ```bash
+        npm install
+        ```
+      </Step>
+      <Step title="Run the server">
+        ```bash
+        npm start
+        ```
+      </Step>
+    </Steps>
+
+    ### package.json
+
+    ```json package.json
+    {
+      "name": "tutorial-mcp",
+      "version": "1.0.0",
+      "type": "module",
+      "scripts": {
+        "start": "node index.js"
+      },
+      "dependencies": {
+        "@modelcontextprotocol/sdk": ">=1.26.0",
+        "zod": "^3.24.2"
+      }
+    }
+    ```
+
+    ### Server code
+
+    ```javascript index.js
+    import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+    import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+    import { z } from "zod";
+
+    // Create an MCP server
+    const server = new McpServer({
+      name: "Calculator MCP Server",
+      version: "1.0.0"
+    });
+
+    // Add tool
+    server.tool(
+      "add",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a + b) }]
+      })
+    );
+
+    // Subtract tool
+    server.tool(
+      "subtract",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a - b) }]
+      })
+    );
+
+    // Multiply tool
+    server.tool(
+      "multiply",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a * b) }]
+      })
+    );
+
+    // Divide tool — includes divide-by-zero guard
+    server.tool(
+      "divide",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => {
+        if (b === 0) {
+          return {
+            content: [{ type: "text", text: "Error: Cannot divide by zero" }],
+            isError: true
+          };
+        }
+        return {
+          content: [{ type: "text", text: String(a / b) }]
+        };
+      }
+    );
+
+    // Connect via stdio
+    const transport = new StdioServerTransport();
+    server.connect(transport).catch(console.error);
+
+    console.log("Calculator MCP Server started");
+    ```
+
+    Each tool uses a Zod schema to declare its input types. The MCP SDK validates incoming arguments automatically before calling the handler.
+  </Tab>
+
+  <Tab title="Advanced">
+    ## Advanced server with resources and event emitters
+
+    Located at `04-PracticalImplementation/samples/javascript`, this sample shows a class-based server architecture with a `completion` tool and a `search` resource.
+
+    <Steps>
+      <Step title="Navigate to the advanced sample">
+        ```bash
+        cd 04-PracticalImplementation/samples/javascript
+        ```
+      </Step>
+      <Step title="Install and run">
+        ```bash
+        npm install
+        npm start
+        ```
+      </Step>
+    </Steps>
+
+    ### Server code
+
+    <CodeGroup>
+      ```javascript ExtendedMcpServer class
+      import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+      import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+      import { z } from 'zod';
+      import EventEmitter from 'events';
+
+      class ExtendedMcpServer {
+        constructor(options = {}) {
+          this.serverName = options.serverName || 'JavaScript MCP Server';
+          this.models = options.models || ['gpt-4', 'llama-3-70b', 'claude-3-sonnet'];
+          this.events = new EventEmitter();
+          this.mcpServer = new McpServer({
+            name: this.serverName,
+            version: options.version || '1.0.0'
+          });
+          this.registerCompletionTool();
+          this.registerSearchResource();
+        }
+
+        async connect() {
+          const transport = new StdioServerTransport();
+          await this.mcpServer.connect(transport);
+        }
+
+        on(event, listener) {
+          this.events.on(event, listener);
+        }
+      }
+      ```
+
+      ```javascript Completion tool
+      registerCompletionTool() {
+        this.mcpServer.tool(
+          'completion',
+          {
+            model: z.string(),
+            prompt: z.string(),
+            options: z.object({
+              temperature: z.number().optional(),
+              max_tokens: z.number().optional(),
+              stream: z.boolean().optional()
+            }).optional()
+          },
+          async ({ model, prompt, options }) => {
+            if (!this.models.includes(model)) {
+              throw new Error(`Model ${model} not supported`);
+            }
+
+            this.events.emit('request', { type: 'completion', model, timestamp: new Date() });
+
+            const response = {
+              id: `mcp-resp-${Date.now()}`,
+              model,
+              text: `This is a response to: ${prompt.substring(0, 30)}...`,
+              usage: {
+                promptTokens: prompt.split(' ').length,
+                completionTokens: 20,
+                totalTokens: prompt.split(' ').length + 20
+              }
+            };
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+            this.events.emit('completion', { model, timestamp: new Date() });
+
+            return { content: [{ type: 'text', text: JSON.stringify(response) }] };
+          }
+        );
+      }
+      ```
+
+      ```javascript Search resource
+      registerSearchResource() {
+        this.mcpServer.resource(
+          'search',
+          'search://{query}',
+          async (uri, { query }) => {
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const results = [
+              { title: 'Result 1', snippet: `Related to ${query}...` },
+              { title: 'Result 2', snippet: `Information about ${query}...` },
+              { title: 'Result 3', snippet: `More details on ${query}...` }
+            ];
+
+            return {
+              contents: [{ uri: uri.href, text: JSON.stringify(results) }]
+            };
+          }
+        );
+      }
+      ```
+    </CodeGroup>
+
+    ### Key patterns demonstrated
+
+    | Pattern | Detail |
+    |---------|--------|
+    | Class-based server | Encapsulates server state and tool registration in a class |
+    | Event emitters | Emits `request` and `completion` events for monitoring/metrics |
+    | Resources with URI templates | `search://{query}` — clients read dynamic data via URI patterns |
+    | Model validation | Checks model name against a supported list before processing |
+  </Tab>
+</Tabs>

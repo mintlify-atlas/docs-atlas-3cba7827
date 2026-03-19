@@ -1,0 +1,133 @@
+---
+title: "VS Code Integration"
+description: "Configure Visual Studio Code and GitHub Copilot Agent mode to consume your MCP server directly from the editor."
+---
+
+Visual Studio Code and GitHub Copilot can act as MCP clients. Once you point VS Code at your server, every tool it exposes becomes available through the Copilot Chat interface — controlled by natural language, without writing any additional client code.
+
+## Learning objectives
+
+By the end of this lesson you will be able to:
+
+- Configure VS Code to find and connect to your MCP server
+- Discover server tools through the Copilot Chat tools panel
+- Invoke tools via natural-language prompts in Agent mode
+- Understand how to pass secrets like API keys to MCP servers
+
+## Two ways to control VS Code MCP integration
+
+<CardGroup cols={2}>
+  <Card title="Visual interface" icon="window">
+    Edit `.vscode/mcp.json` and use the play button in the editor to start/stop servers.
+  </Card>
+  <Card title="Terminal / CLI" icon="terminal">
+    Use the `code --add-mcp` command to add a server directly from the shell:
+    ```bash
+    code --add-mcp '{"name":"my-server","command":"uvx","args":["mcp-server-fetch"]}'
+    ```
+  </Card>
+</CardGroup>
+
+## Exercise: Consuming a server from VS Code
+
+<Steps>
+  <Step title="Enable MCP server discovery">
+    1. Open **File → Preferences → Settings** (or `Ctrl+,` / `Cmd+,`).
+    2. Search for `MCP`.
+    3. Enable **chat.mcp.discovery.enabled** in your `settings.json`.
+  </Step>
+
+  <Step title="Create the config file">
+    In your project root, create a `.vscode` directory and add an `mcp.json` file:
+
+    ```text
+    .vscode/
+    └── mcp.json
+    ```
+  </Step>
+
+  <Step title="Configure your server">
+    Add a server entry to `.vscode/mcp.json`. The `command` and `args` tell VS Code how to start the server process.
+
+    ```json
+    {
+      "inputs": [],
+      "servers": {
+        "hello-mcp": {
+          "command": "node",
+          "args": ["build/index.js"]
+        }
+      }
+    }
+    ```
+
+    For a Python server:
+
+    ```json
+    {
+      "inputs": [],
+      "servers": {
+        "calculator-py": {
+          "command": "python",
+          "args": ["server.py"]
+        }
+      }
+    }
+    ```
+
+    To prompt the user for an API key at startup, add an input:
+
+    ```json
+    {
+      "inputs": [
+        {
+          "type": "promptString",
+          "id": "weather-api-key",
+          "description": "Weather API Key",
+          "password": true
+        }
+      ],
+      "servers": {
+        "weather-sse": {
+          "type": "sse",
+          "url": "http://localhost:8000/sse",
+          "headers": {
+            "x-api-key": "${input:weather-api-key}"
+          }
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Start the server">
+    Open `mcp.json` in the VS Code editor. Locate the play icon (▶) next to your server entry and click it. The server process starts and VS Code connects to it.
+
+    Once connected, the tools icon in the GitHub Copilot Chat panel shows the number of available tools. Click it to see the list and toggle individual tools on or off.
+  </Step>
+
+  <Step title="Invoke a tool with a prompt">
+    Open the GitHub Copilot Chat panel (`Ctrl+Shift+I` / `Cmd+Shift+I`), switch to **Agent** mode, and type a prompt that matches one of your server's tools:
+
+    ```text
+    add 22 to 1
+    ```
+
+    Copilot should respond with `23` by calling the `add` tool on your server.
+  </Step>
+</Steps>
+
+<Tip>
+You can prompt users for inputs like API keys directly in `mcp.json` using `inputs` with `type: "promptString"`. VS Code will show a secure input dialog before starting the server.
+</Tip>
+
+## Assignment
+
+Add a server entry to your `mcp.json` file and confirm you can start and stop it. Then test communication with your server's tools through the GitHub Copilot Chat interface.
+
+## Key takeaways
+
+- VS Code is a powerful MCP host that lets you consume multiple MCP servers without writing client code.
+- GitHub Copilot Chat's Agent mode is the primary interface for interacting with server tools.
+- You can prompt users for inputs like API keys when configuring the server entry in `mcp.json`.
+- The `code --add-mcp` command lets you register servers directly from the terminal.

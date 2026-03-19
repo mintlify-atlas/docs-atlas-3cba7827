@@ -1,0 +1,92 @@
+---
+title: Code Samples Overview
+description: Hands-on MCP code samples in C#, Java, JavaScript, Python, TypeScript, and Rust — from a basic calculator server to advanced production implementations.
+---
+
+The MCP for Beginners curriculum includes working code samples at two levels: a **basic calculator server** to introduce core MCP concepts, and **advanced implementations** that demonstrate real-world patterns like resources, prompts, HTTP transport, and cloud deployment.
+
+Every sample is self-contained and runnable. Pick the language you know best and follow the step-by-step guide.
+
+## Basic calculator samples
+
+Each basic sample implements the same calculator MCP server — `add`, `subtract`, `multiply`, and `divide` — using a stdio transport. This makes it easy to compare how the same MCP concept is expressed across languages.
+
+| Language | SDK / Framework | Transport | Source |
+|----------|----------------|-----------|--------|
+| C# / .NET | `ModelContextProtocol` | stdio | [View](/samples/csharp) |
+| Java | Spring AI + Spring Boot WebFlux | SSE | [View](/samples/java) |
+| JavaScript | `@modelcontextprotocol/sdk` | stdio | [View](/samples/javascript) |
+| Python | FastMCP | stdio | [View](/samples/python) |
+| TypeScript | `@modelcontextprotocol/sdk` | stdio | [View](/samples/typescript) |
+| Rust | `rmcp` | stdio | [View](/samples/rust) |
+
+## Advanced samples
+
+The advanced samples go beyond the calculator to show production-ready patterns.
+
+| Language | Highlights | Source |
+|----------|------------|--------|
+| C# / .NET | HTTP/Streamable transport, .NET Aspire, Azure deployment | [View](/samples/csharp) |
+| Java | Content safety integration, LangChain4j, Azure Content Safety | [View](/samples/java) |
+| JavaScript | Class-based server, resources, event emitters | [View](/samples/javascript) |
+| Python | Tools + resources + prompts, full client/server pair | [View](/samples/python) |
+| TypeScript | Typed class-based server, ResourceTemplate, event system | [View](/samples/typescript) |
+
+## What the samples cover
+
+<CardGroup cols={2}>
+  <Card title="Tools" icon="wrench">
+    Register callable functions (add, subtract, multiply, divide) that an AI model can invoke through the MCP protocol.
+  </Card>
+  <Card title="Resources" icon="database">
+    Expose data endpoints like `models://` or `greeting://{name}` that clients can read at any time.
+  </Card>
+  <Card title="Prompts" icon="message">
+    Provide reusable prompt templates — for example, a `review_code` prompt that wraps user code in a structured review request.
+  </Card>
+  <Card title="Transports" icon="arrows-left-right">
+    Use stdio for local development and SSE or Streamable HTTP for networked or cloud deployments.
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before running any sample, make sure you have the runtime for your chosen language:
+
+<Tabs>
+  <Tab title="C#">
+    - [.NET 9 SDK](https://dotnet.microsoft.com/download)
+    - (Optional) Docker for the containerized version
+    - (Optional) `azd` CLI for Azure deployment
+  </Tab>
+  <Tab title="Java">
+    - Java 21+
+    - Maven 3.9+
+    - (Optional) Docker for the containerized version
+  </Tab>
+  <Tab title="JavaScript">
+    - Node.js 18+
+    - npm
+  </Tab>
+  <Tab title="Python">
+    - Python 3.8+
+    - pip
+  </Tab>
+  <Tab title="TypeScript">
+    - Node.js 18+
+    - npm
+  </Tab>
+  <Tab title="Rust">
+    - Rust + Cargo (stable toolchain)
+  </Tab>
+</Tabs>
+
+## Testing with MCP Inspector
+
+All samples can be tested with the MCP Inspector — a browser-based tool for listing tools and calling them interactively.
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+For stdio servers, configure the Inspector to launch the server process directly. For SSE or HTTP servers, point it at the running server's endpoint URL.

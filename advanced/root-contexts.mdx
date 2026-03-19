@@ -1,0 +1,349 @@
+---
+title: "Root Contexts"
+description: "Use root contexts to maintain persistent conversation history, shared state, and multi-turn dialogue across MCP requests and sessions."
+---
+
+## Overview
+
+Root contexts are containers that hold the history and state for a series of related interactions in MCP. They enable coherent multi-turn conversations, state tracking across complex workflows, and context sharing across clients.
+
+<CardGroup cols={2}>
+  <Card title="Conversation persistence" icon="comments">
+    Maintain coherent multi-turn conversations without re-sending history
+  </Card>
+  <Card title="Memory management" icon="database">
+    Store and retrieve information across interactions
+  </Card>
+  <Card title="State management" icon="list-check">
+    Track progress in complex multi-step workflows
+  </Card>
+  <Card title="Context sharing" icon="share-nodes">
+    Allow multiple clients to access the same conversation state
+  </Card>
+</CardGroup>
+
+## Root context lifecycle
+
+```
+Create Root Context
+       │
+       ▼
+Initialize with Metadata
+       │
+       ▼
+Send Requests with Context ID ◄──┐
+       │                          │
+       ▼                          │
+Update Context with Results ──────┘
+       │
+       ▼
+Archive Context When Complete
+```
+
+## C# implementation
+
+```csharp
+// .NET Example: Root Context Management
+using Microsoft.Mcp.Client;
+using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+
+public class RootContextExample
+{
+    private readonly IMcpClient _client;
+    private readonly IRootContextManager _contextManager;
+
+    public RootContextExample(IMcpClient client, IRootContextManager contextManager)
+    {
+        _client = client;
+        _contextManager = contextManager;
+    }
+
+    public async Task DemonstrateRootContextAsync()
+    {
+        // 1. Create a new root context
+        var contextResult = await _contextManager.CreateRootContextAsync(
+            new RootContextCreateOptions
+            {
+                Name = "Customer Support Session",
+                Metadata = new Dictionary<string, string>
+                {
+                    ["CustomerName"]  = "Acme Corporation",
+                    ["PriorityLevel"] = "High",
+                    ["Domain"]        = "Cloud Services"
+                }
+            });
+
+        string contextId = contextResult.ContextId;
+        Console.WriteLine($"Created root context: {contextId}");
+
+        // 2. First interaction
+        var response1 = await _client.SendPromptAsync(
+            "I'm having issues scaling my web service deployment in the cloud.",
+            new SendPromptOptions { RootContextId = contextId }
+        );
+        Console.WriteLine($"Response 1: {response1.GeneratedText}");
+
+        // 3. Second interaction — model retains previous context
+        var response2 = await _client.SendPromptAsync(
+            "Yes, we're using containerized deployments with Kubernetes.",
+            new SendPromptOptions { RootContextId = contextId }
+        );
+        Console.WriteLine($"Response 2: {response2.GeneratedText}");
+
+        // 4. Enrich context metadata from conversation
+        await _contextManager.UpdateContextMetadataAsync(contextId,
+            new Dictionary<string, string>
+            {
+                ["TechnicalEnvironment"] = "Kubernetes",
+                ["IssueType"]            = "Scaling"
+            });
+
+        // 5. Inspect context
+        var contextInfo = await _contextManager.GetRootContextInfoAsync(contextId);
+        Console.WriteLine($"Messages: {contextInfo.MessageCount}");
+
+        // 6. Archive when done
+        await _contextManager.ArchiveRootContextAsync(contextId);
+    }
+}
+```
+
+## Java implementation — financial analysis
+
+```java
+// Java Example: Root Context for Financial Analysis
+package com.example.mcp.contexts;
+
+import com.mcp.client.McpClient;
+import com.mcp.client.ContextManager;
+import com.mcp.models.RootContext;
+import com.mcp.models.McpResponse;
+import java.util.HashMap;
+import java.util.Map;
+
+public class RootContextsDemo {
+    private final McpClient client;
+    private final ContextManager contextManager;
+
+    public RootContextsDemo(String serverUrl) {
+        this.client = new McpClient.Builder()
+            .setServerUrl(serverUrl)
+            .build();
+        this.contextManager = new ContextManager(client);
+    }
+
+    public void demonstrateRootContext() throws Exception {
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("projectName", "Financial Analysis");
+        metadata.put("userRole",    "Financial Analyst");
+        metadata.put("dataSource",  "Q1 2025 Financial Reports");
+
+        // 1. Create context
+        RootContext context = contextManager.createRootContext(
+            "Financial Analysis Session", metadata);
+        String contextId = context.getId();
+
+        // 2. First query
+        McpResponse response1 = client.sendPrompt(
+            "Analyze the trends in Q1 financial data for our technology division",
+            contextId
+        );
+
+        // 3. Enrich context with insights
+        contextManager.addContextMetadata(contextId,
+            Map.of("identifiedTrend", "Increasing cloud infrastructure costs"));
+
+        // 4. Follow-up query — uses enriched context
+        McpResponse response2 = client.sendPrompt(
+            "What's driving the increase in cloud infrastructure costs?",
+            contextId
+        );
+
+        // 5. Generate and store summary
+        McpResponse summaryResponse = client.sendPrompt(
+            "Summarize our analysis in 3-5 key points",
+            contextId
+        );
+
+        contextManager.addContextMetadata(contextId,
+            Map.of("analysisSummary", summaryResponse.getGeneratedText()));
+
+        // 6. Archive
+        contextManager.archiveContext(contextId);
+    }
+}
+```
+
+## JavaScript implementation
+
+```javascript
+// JavaScript Example: Managing MCP Root Contexts
+const { McpClient, RootContextManager } = require('@mcp/client');
+
+class ContextSession {
+    constructor(serverUrl, apiKey = null) {
+        this.client = new McpClient({ serverUrl, apiKey });
+        this.contextManager = new RootContextManager(this.client);
+    }
+
+    async createConversationContext(sessionName, metadata = {}) {
+        const contextResult = await this.contextManager.createRootContext({
+            name: sessionName,
+            metadata: {
+                ...metadata,
+                createdAt: new Date().toISOString(),
+                status: 'active'
+            }
+        });
+        console.log(`Created context '${sessionName}': ${contextResult.id}`);
+        return contextResult.id;
+    }
+
+    async sendMessage(contextId, message, options = {}) {
+        const response = await this.client.sendPrompt(message, {
+            rootContextId: contextId,
+            temperature: options.temperature || 0.7,
+            allowedTools: options.allowedTools || []
+        });
+
+        if (options.storeInsights) {
+            await this.storeConversationInsights(
+                contextId, message, response.generatedText);
+        }
+
+        return { message: response.generatedText, contextId };
+    }
+
+    async generateContextSummary(contextId) {
+        const response = await this.client.sendPrompt(
+            "Summarize our conversation in 3-4 sentences, highlighting main points.",
+            { rootContextId: contextId, temperature: 0.3 }
+        );
+
+        await this.contextManager.updateContextMetadata(contextId, {
+            conversationSummary: response.generatedText,
+            summarizedAt: new Date().toISOString()
+        });
+
+        return response.generatedText;
+    }
+
+    async archiveContext(contextId) {
+        const summary = await this.generateContextSummary(contextId);
+        await this.contextManager.archiveContext(contextId);
+        return { status: "archived", contextId, summary };
+    }
+}
+
+// Usage
+async function demonstrateContextSession() {
+    const session = new ContextSession('https://mcp-server-example.com');
+
+    const contextId = await session.createConversationContext(
+        'Product Support - Database Performance',
+        {
+            customer:     'Globex Corporation',
+            product:      'Enterprise Database',
+            severity:     'Medium',
+            supportAgent: 'AI Assistant'
+        }
+    );
+
+    const response1 = await session.sendMessage(
+        contextId,
+        "I'm experiencing slow query performance after the latest update.",
+        { storeInsights: true }
+    );
+
+    const response2 = await session.sendMessage(
+        contextId,
+        "Yes, we've already checked the indexes — they're properly configured.",
+        { storeInsights: true }
+    );
+
+    const archiveResult = await session.archiveContext(contextId);
+    console.log('Summary:', archiveResult.summary);
+}
+```
+
+## Python implementation
+
+```python
+# Python Example: Root Context for Multi-Turn Assistance
+import asyncio
+from datetime import datetime
+from mcp_client import McpClient, RootContextManager
+
+class AssistantSession:
+    def __init__(self, server_url, api_key=None):
+        self.client = McpClient(server_url=server_url, api_key=api_key)
+        self.context_manager = RootContextManager(self.client)
+
+    async def create_session(self, name, user_info=None):
+        metadata = {
+            "session_type": "assistant",
+            "created_at": datetime.now().isoformat(),
+        }
+        if user_info:
+            metadata.update({f"user_{k}": v for k, v in user_info.items()})
+
+        context = await self.context_manager.create_root_context(name, metadata)
+        return context.id
+
+    async def send_message(self, context_id, message, tools=None):
+        options = {"root_context_id": context_id}
+        if tools:
+            options["allowed_tools"] = tools
+
+        response = await self.client.send_prompt(message, options)
+
+        await self.context_manager.update_context_metadata(
+            context_id,
+            {
+                f"message_{datetime.now().timestamp()}": message[:50] + "...",
+                "last_interaction": datetime.now().isoformat()
+            }
+        )
+        return response
+
+    async def end_session(self, context_id):
+        summary_response = await self.client.send_prompt(
+            "Summarize our conversation and any key decisions made.",
+            {"root_context_id": context_id}
+        )
+
+        await self.context_manager.update_context_metadata(
+            context_id,
+            {
+                "summary":    summary_response.generated_text,
+                "ended_at":   datetime.now().isoformat(),
+                "status":     "completed"
+            }
+        )
+        await self.context_manager.archive_context(context_id)
+
+        return {"status": "completed", "summary": summary_response.generated_text}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Create focused contexts" icon="crosshairs">
+    Use separate root contexts for different conversation purposes to maintain clarity
+  </Card>
+  <Card title="Set expiration policies" icon="clock">
+    Archive or delete old contexts to manage storage and comply with data retention policies
+  </Card>
+  <Card title="Store relevant metadata" icon="tags">
+    Enrich contexts with domain-specific metadata as conversations reveal new information
+  </Card>
+  <Card title="Generate summaries" icon="compress">
+    When contexts grow large, summarize them to manage token size while preserving key insights
+  </Card>
+</CardGroup>
+
+<Tip>
+  When a context grows very long, use the model itself to generate a summary, store it in context metadata, and optionally start a fresh context that begins with the summary. This prevents context window exhaustion in long-running workflows.
+</Tip>
