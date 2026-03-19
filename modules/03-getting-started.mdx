@@ -20,6 +20,8 @@ By the end of this module you will have:
 - An understanding of both stdio and Streamable HTTP transports
 - Tests for your server logic
 - A deployment strategy for local and cloud environments
+- Authentication middleware using basic auth and RBAC
+- Sampling configured so your server can delegate LLM calls to the client
 
 ## Lessons in this module
 
@@ -50,6 +52,21 @@ By the end of this module you will have:
   </Card>
   <Card title="Deploying MCP Servers" icon="cloud-arrow-up" href="/modules/03-deployment">
     Deploy your MCP server locally, in containers, and to Azure Container Apps.
+  </Card>
+  <Card title="Advanced Server Usage" icon="code-branch" href="/modules/03-advanced-server">
+    Use the low-level server API with explicit list/call handlers and a modular project architecture.
+  </Card>
+  <Card title="Simple Authentication" icon="lock" href="/modules/03-simple-auth">
+    Add basic auth middleware and RBAC to your MCP server as a stepping stone toward full OAuth 2.1.
+  </Card>
+  <Card title="Configuring MCP Hosts" icon="desktop" href="/modules/03-mcp-hosts">
+    Set up your server in Claude Desktop, Cursor, Cline, and Windsurf using JSON configuration files.
+  </Card>
+  <Card title="MCP Inspector" icon="magnifying-glass" href="/modules/03-mcp-inspector">
+    Interactively debug and test your server — browse tools, resources, prompts, and JSON-RPC messages.
+  </Card>
+  <Card title="Sampling" icon="wand-magic-sparkles" href="/modules/03-sampling">
+    Delegate LLM calls from your server to the client using the MCP sampling protocol.
   </Card>
 </CardGroup>
 

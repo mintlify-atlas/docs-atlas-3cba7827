@@ -1,0 +1,213 @@
+---
+title: "MCP Inspector"
+description: "Use the MCP Inspector to interactively debug and test your MCP servers — browse tools, resources, prompts, and inspect JSON-RPC messages."
+---
+
+The **MCP Inspector** is an essential debugging tool that lets you test and troubleshoot your MCP servers without a full AI host application. Think of it as "Postman for MCP" — it provides a visual interface to send requests, view responses, and understand how your server behaves.
+
+## Why use the MCP Inspector?
+
+When building MCP servers, you'll commonly ask:
+
+- *"Is my server even running?"* — Inspector shows connection status
+- *"Are my tools registered correctly?"* — Inspector lists all available tools
+- *"What's the response format?"* — Inspector displays full JSON responses
+- *"Why isn't this tool working?"* — Inspector shows detailed error messages
+
+## Prerequisites
+
+- Node.js 18+ and npm installed
+- A working MCP server (see [Building Your First Server](/modules/03-first-server))
+
+## Installation
+
+<Tabs>
+  <Tab title="npx (recommended)">
+    No installation needed — run on demand:
+
+    ```bash
+    npx @modelcontextprotocol/inspector
+    ```
+
+    `npx` downloads the Inspector temporarily, runs it, and cleans up afterwards.
+  </Tab>
+  <Tab title="Global install">
+    ```bash
+    npm install -g @modelcontextprotocol/inspector
+    mcp-inspector
+    ```
+  </Tab>
+  <Tab title="Project devDependency">
+    ```bash
+    npm install --save-dev @modelcontextprotocol/inspector
+    ```
+
+    Add to `package.json`:
+
+    ```json
+    {
+      "scripts": {
+        "inspector": "mcp-inspector"
+      }
+    }
+    ```
+
+    Then run:
+
+    ```bash
+    npm run inspector
+    ```
+  </Tab>
+</Tabs>
+
+## Connecting to your server
+
+### stdio servers (local process)
+
+Pass the server startup command directly to the Inspector:
+
+```bash
+# Python server
+npx @modelcontextprotocol/inspector python server.py
+
+# Node.js/TypeScript server
+npx @modelcontextprotocol/inspector node ./build/index.js
+
+# .NET server
+npx @modelcontextprotocol/inspector dotnet run
+
+# With environment variables
+OPENAI_API_KEY=xxx npx @modelcontextprotocol/inspector python server.py
+```
+
+### SSE/HTTP servers (remote)
+
+Start your server first, then connect the Inspector to it:
+
+```bash
+# Start the server in terminal 1
+python server.py  # running on http://localhost:8080
+
+# Launch Inspector and point to SSE endpoint in terminal 2
+npx @modelcontextprotocol/inspector --sse http://localhost:8080/sse
+```
+
+## Inspector interface
+
+The web interface (typically at `http://localhost:5173`) shows three tabs:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MCP Inspector                              [Connected ✅]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   🔧 Tools  │  │ 📄 Resources│  │ 💬 Prompts  │         │
+│  │    (3)      │  │    (2)      │  │    (1)      │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │  📋 Message Log                                       │ │
+│  │  → initialize                                         │ │
+│  │  ← initialized (server info)                          │ │
+│  │  → tools/list                                         │ │
+│  │  ← tools (3 tools)                                    │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Testing tools
+
+<Steps>
+  <Step title="Open the Tools tab">
+    Inspector automatically calls `tools/list`. You'll see each registered tool with its name, description, and input schema.
+  </Step>
+  <Step title="Select a tool and fill in parameters">
+    Click a tool, fill in the form fields that correspond to its input schema.
+  </Step>
+  <Step title="Click Run Tool and view the response">
+    Example for a calculator's `add` tool:
+
+    ```
+    Tool: add
+    Parameters:
+      a: 25
+      b: 17
+
+    Response:
+    {
+      "content": [
+        { "type": "text", "text": "42" }
+      ]
+    }
+    ```
+  </Step>
+</Steps>
+
+## Debugging tool errors
+
+When a tool fails, Inspector shows structured error output:
+
+```json
+{
+  "error": {
+    "code": -32602,
+    "message": "Invalid params: 'b' is required"
+  }
+}
+```
+
+### JSON-RPC error codes
+
+| Code | Meaning |
+|------|---------|
+| `-32700` | Parse error — invalid JSON received |
+| `-32600` | Invalid request structure |
+| `-32601` | Method not found |
+| `-32602` | Invalid params |
+| `-32603` | Internal server error |
+
+## Testing resources and prompts
+
+<AccordionGroup>
+  <Accordion title="Testing resources">
+    1. Click the **Resources** tab.
+    2. Inspector calls `resources/list` — you'll see all resource URIs, names, and MIME types.
+    3. Select a resource and click **Read Resource** to see its content.
+
+    For parameterized resources like `greeting://{name}`, enter the URI with the parameter filled in.
+  </Accordion>
+  <Accordion title="Testing prompts">
+    1. Click the **Prompts** tab.
+    2. Inspector calls `prompts/list` — you'll see all registered prompt templates.
+    3. Select a prompt, fill in arguments, and click **Get Prompt** to see the rendered message template.
+  </Accordion>
+</AccordionGroup>
+
+## CLI mode
+
+For automation and CI/CD use, add `--cli` to run without a browser:
+
+```bash
+# List all tools
+npx @modelcontextprotocol/inspector --cli node build/index.js --method tools/list
+
+# Call a specific tool
+npx @modelcontextprotocol/inspector --cli node build/index.js \
+  --method tools/call --tool-name add --tool-arg a=5 b=3
+
+# List resources
+npx @modelcontextprotocol/inspector --cli python server.py --method resources/list
+```
+
+<Tip>
+  CLI mode is ideal for smoke testing in CI/CD pipelines. Combine it with tools like `jq` to parse the JSON output and assert expected responses.
+</Tip>
+
+## Key takeaways
+
+- Launch the Inspector by passing your server startup command: `npx @modelcontextprotocol/inspector node build/index.js`
+- For stdio servers, the Inspector manages the server process. For HTTP servers, start the server first then connect with `--sse`.
+- Use the **Tools**, **Resources**, and **Prompts** tabs to interactively test each capability.
+- Add `--cli` for CI-friendly non-interactive testing.
+- Error codes follow the JSON-RPC 2.0 standard (`-32600` to `-32603`).

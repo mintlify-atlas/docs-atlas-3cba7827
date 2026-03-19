@@ -1,0 +1,199 @@
+---
+title: "Simple Authentication"
+description: "Add basic auth and RBAC to your MCP server before implementing full OAuth 2.1 — a stepping stone to production security."
+---
+
+MCP SDKs support OAuth 2.1, but implementing it fully involves auth servers, resource servers, authorization codes, and token exchanges. This lesson walks you through **basic auth first** — a simpler foundation you can harden progressively using the patterns in [Module 2: Security](/modules/02-security) and [Advanced Topics: OAuth2](/advanced/oauth2).
+
+## What is auth?
+
+Auth covers two things:
+
+| Term | Definition | Example |
+|------|-----------|---------|
+| **Authentication** | Verify the caller is who they claim to be | Valid API key or credentials |
+| **Authorization** | Verify the caller can access the requested resource | Read-only vs. admin access (RBAC) |
+
+## Basic authentication flow
+
+The simplest approach is to require an `Authorization` header on every request and validate it in server middleware:
+
+```
+User → Client → [Authorization: secret123] → Server middleware → MCP tools
+                                              ↓
+                                        401 Unauthorized (missing header)
+                                        403 Forbidden (invalid token)
+```
+
+## Implementing auth middleware
+
+<Tabs>
+  <Tab title="Python">
+    Add Starlette middleware that validates the `Authorization` header before the request reaches MCP handlers:
+
+    ```python
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import Response
+
+    VALID_TOKENS = {"secret123", "another-token"}
+
+    def valid_token(auth_header: str) -> bool:
+        return auth_header in VALID_TOKENS
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            has_header = request.headers.get("Authorization")
+            if not has_header:
+                print("-> Missing Authorization header!")
+                return Response(status_code=401, content="Unauthorized")
+
+            if not valid_token(has_header):
+                print("-> Invalid token!")
+                return Response(status_code=403, content="Forbidden")
+
+            print("Valid token, proceeding...")
+            response = await call_next(request)
+            return response
+
+    # Apply middleware to the Starlette app wrapping your MCP server
+    starlette_app.add_middleware(AuthMiddleware)
+    ```
+
+    ### Creating the server and Starlette app
+
+    ```python
+    from mcp.server.fastmcp import FastMCP
+    import uvicorn
+
+    app = FastMCP(
+        name="MCP Resource Server",
+        host="0.0.0.0",
+        port=8080,
+    )
+
+    # Wrap in Starlette for middleware support
+    starlette_app = app.streamable_http_app()
+    starlette_app.add_middleware(AuthMiddleware)
+
+    if __name__ == "__main__":
+        uvicorn.run(starlette_app, host="0.0.0.0", port=8080)
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    Add Express middleware that validates the `Authorization` header:
+
+    ```typescript
+    import express from "express";
+    import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+    const app = express();
+
+    const VALID_TOKENS = new Set(["secret123", "another-token"]);
+
+    function isValid(secret: string): boolean {
+        return VALID_TOKENS.has(secret);
+    }
+
+    // Auth middleware — runs before every request
+    app.use((req, res, next) => {
+        const authHeader = req.headers["authorization"];
+
+        if (!authHeader) {
+            res.status(401).send("Unauthorized");
+            return;
+        }
+
+        if (!isValid(authHeader)) {
+            res.status(403).send("Forbidden");
+            return;
+        }
+
+        console.log("Valid token, proceeding...");
+        next();
+    });
+
+    // Mount your MCP server routes after the auth middleware
+    app.post("/mcp", async (req, res) => {
+        const server = new McpServer({
+            name: "example-server",
+            version: "1.0.0"
+        });
+        // ... register tools, resources, prompts ...
+    });
+
+    app.listen(8080);
+    ```
+  </Tab>
+</Tabs>
+
+## Making an authenticated client request
+
+Once your server requires auth, clients must include the `Authorization` header:
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def main():
+        async with streamablehttp_client(
+            "http://localhost:8080/mcp",
+            headers={"Authorization": "secret123"}
+        ) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                print(f"Available tools: {[t.name for t in tools.tools]}")
+    ```
+  </Tab>
+  <Tab title="curl">
+    ```bash
+    # Test metadata — should return 200 if token is valid
+    curl -H "Authorization: secret123" http://localhost:8080/mcp
+
+    # Missing token — returns 401
+    curl http://localhost:8080/mcp
+
+    # Invalid token — returns 403
+    curl -H "Authorization: wrong-secret" http://localhost:8080/mcp
+    ```
+  </Tab>
+</Tabs>
+
+## Role-Based Access Control (RBAC)
+
+After verifying identity, you can also check permissions per route or tool:
+
+```python
+ROLES = {
+    "admin-token": ["read", "write", "delete"],
+    "reader-token": ["read"],
+}
+
+def has_permission(token: str, action: str) -> bool:
+    return action in ROLES.get(token, [])
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        token = request.headers.get("Authorization", "")
+        if not token:
+            return Response(status_code=401, content="Unauthorized")
+
+        # For write operations, require write permission
+        if request.method == "POST" and not has_permission(token, "write"):
+            return Response(status_code=403, content="Insufficient permissions")
+
+        return await call_next(request)
+```
+
+<Warning>
+  Basic auth with a static secret is suitable for development and internal tools. For production, implement [OAuth 2.1](/advanced/oauth2) or [Microsoft Entra ID](/advanced/entra-id-auth) authentication as covered in the Advanced Topics section.
+</Warning>
+
+## Key takeaways
+
+- Add a middleware layer that validates the `Authorization` header before requests reach MCP handlers.
+- Return `401 Unauthorized` for missing tokens, `403 Forbidden` for invalid ones.
+- RBAC maps tokens to permission sets and checks per action.
+- Upgrade to OAuth 2.1 for production — this basic pattern is a stepping stone, not a final destination.

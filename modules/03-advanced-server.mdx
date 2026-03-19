@@ -1,0 +1,205 @@
+---
+title: "Advanced Server Usage"
+description: "Use the low-level MCP server API with explicit list/call handlers, Pydantic/Zod validation, and a clean modular architecture."
+---
+
+The MCP SDK exposes two server styles: the **high-level server** (e.g. `FastMCP`, `McpServer`) you used in the previous lessons, and a **low-level server** that gives you complete control over how tools, resources, and prompts are listed and called.
+
+## When to use the low-level server
+
+<CardGroup cols={2}>
+  <Card title="Better architecture" icon="sitemap">
+    Register all tools through two handlers instead of individual `tool()` calls, enabling a clean folder-based project structure.
+  </Card>
+  <Card title="Advanced feature access" icon="unlock">
+    Some features — such as sampling and elicitation — are only available through the low-level server API.
+  </Card>
+</CardGroup>
+
+## High-level vs. low-level comparison
+
+<Tabs>
+  <Tab title="Python">
+    ### High-level (FastMCP)
+
+    Each tool is registered individually with a decorator:
+
+    ```python
+    mcp = FastMCP("Demo")
+
+    @mcp.tool()
+    def add(a: int, b: int) -> int:
+        """Add two numbers"""
+        return a + b
+    ```
+
+    ### Low-level (Server)
+
+    Two handlers replace all individual registrations — one to list all tools, one to call any tool:
+
+    ```python
+    from mcp.server import Server
+    import mcp.types as types
+
+    server = Server("demo-server")
+
+    @server.list_tools()
+    async def handle_list_tools() -> list[types.Tool]:
+        """List available tools."""
+        return [
+            types.Tool(
+                name="add",
+                description="Add two numbers",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number", "description": "first number"},
+                        "b": {"type": "number", "description": "second number"}
+                    },
+                    "required": ["a", "b"],
+                },
+            )
+        ]
+
+    @server.call_tool()
+    async def handle_call_tool(
+        name: str, arguments: dict | None
+    ) -> list[types.TextContent]:
+        if name not in tools:
+            raise ValueError(f"Unknown tool: {name}")
+
+        tool = tools[name]
+        result = await tool["handler"](arguments)
+        return [types.TextContent(type="text", text=str(result))]
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ### High-level (McpServer)
+
+    ```typescript
+    import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+    import { z } from "zod";
+
+    const server = new McpServer({ name: "demo-server", version: "1.0.0" });
+
+    server.tool(
+      "add",
+      { a: z.number(), b: z.number() },
+      async ({ a, b }) => ({
+        content: [{ type: "text", text: String(a + b) }]
+      })
+    );
+    ```
+
+    ### Low-level (Server with request handlers)
+
+    ```typescript
+    import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+    import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+    const server = new Server({ name: "demo-server", version: "1.0.0" });
+
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [{
+        name: "add",
+        description: "Add two numbers",
+        inputSchema: {
+          type: "object",
+          properties: {
+            a: { type: "number", description: "first number" },
+            b: { type: "number", description: "second number" }
+          },
+          required: ["a", "b"]
+        }
+      }]
+    }));
+
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
+      const tool = tools.find(t => t.name === name);
+      if (!tool) {
+        throw new Error(`Tool ${name} not found`);
+      }
+      const result = await tool.handler(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }]
+      };
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Modular project structure
+
+With the low-level approach you can organize your project cleanly:
+
+```text
+app/
+├── tools/
+│   ├── add/
+│   │   ├── schema.py   # Pydantic model / Zod schema
+│   │   └── handler.py  # Tool logic
+│   └── subtract/
+│       ├── schema.py
+│       └── handler.py
+├── resources/
+│   ├── products/
+│   └── schemas/
+├── prompts/
+│   └── product-description/
+└── server.py           # Registers the two list/call handlers
+```
+
+## Adding validation
+
+Use your runtime's schema library to validate tool arguments before calling handler logic.
+
+<Tabs>
+  <Tab title="Python (Pydantic)">
+    ```python
+    # tools/add/schema.py
+    from pydantic import BaseModel
+
+    class AddInputModel(BaseModel):
+        a: float
+        b: float
+
+    # tools/add/handler.py
+    from .schema import AddInputModel
+
+    async def add_handler(args: dict) -> float:
+        input_model = AddInputModel(**args)  # validates & raises if invalid
+        return input_model.a + input_model.b
+    ```
+  </Tab>
+  <Tab title="TypeScript (Zod)">
+    ```typescript
+    // tools/add/schema.ts
+    import { z } from "zod";
+
+    export const AddInputSchema = z.object({
+      a: z.number(),
+      b: z.number()
+    });
+
+    // tools/add/handler.ts
+    import { AddInputSchema } from "./schema";
+
+    export async function addHandler(args: unknown): Promise<number> {
+      const { a, b } = AddInputSchema.parse(args);  // throws ZodError if invalid
+      return a + b;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The low-level server is required for advanced features like **sampling** (delegating LLM calls to the client) and **elicitation** (requesting additional user input mid-session). If you only need basic tools and resources, the high-level server is simpler and sufficient.
+</Note>
+
+## Key takeaways
+
+- The **high-level server** is easier: register each tool/resource/prompt individually.
+- The **low-level server** uses two handlers per feature type — enabling a modular folder-based architecture.
+- Use Pydantic (Python) or Zod (TypeScript) to validate tool arguments in the call handler.
+- Some advanced features (sampling, elicitation) require the low-level server API.

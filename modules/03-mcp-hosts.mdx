@@ -1,0 +1,223 @@
+---
+title: "Configuring MCP Hosts"
+description: "Set up your MCP server in Claude Desktop, VS Code, Cursor, Cline, and Windsurf using JSON configuration files."
+---
+
+An **MCP Host** is an AI application that connects to MCP servers to extend its capabilities. Users interact with the host, while MCP servers provide the back-end tools and data. This lesson shows you how to configure the most popular hosts.
+
+<CardGroup cols={2}>
+  <Card title="Claude Desktop" icon="robot">
+    Anthropic's official desktop app with native MCP support.
+  </Card>
+  <Card title="VS Code + GitHub Copilot" icon="code">
+    Agent mode in VS Code with MCP server connections via `.vscode/mcp.json`.
+  </Card>
+  <Card title="Cursor" icon="arrow-pointer">
+    AI-first code editor with MCP server support.
+  </Card>
+  <Card title="Cline & Windsurf" icon="window">
+    Community editors and extensions with MCP integration.
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- A working MCP server (see [Building Your First Server](/modules/03-first-server))
+- The host application installed
+- Basic familiarity with JSON configuration files
+
+## Claude Desktop
+
+Claude Desktop uses a JSON config file to define which MCP servers are available.
+
+### Configuration file location
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+### Configuration format
+
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "command": "python",
+      "args": ["-m", "mcp_calculator_server"],
+      "env": {
+        "PYTHONPATH": "/path/to/your/server"
+      }
+    },
+    "weather": {
+      "command": "node",
+      "args": ["/path/to/weather-server/build/index.js"]
+    },
+    "database": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@localhost/mydb"
+      }
+    }
+  }
+}
+```
+
+### Configuration fields
+
+| Field | Description |
+|-------|-------------|
+| `command` | Executable to launch the server |
+| `args` | Array of command-line arguments |
+| `env` | Environment variables for the server process |
+
+<Steps>
+  <Step title="Open the config file">
+    Navigate to the configuration file path for your OS. Create it if it doesn't exist.
+  </Step>
+  <Step title="Add your server">
+    Add an entry under `"mcpServers"` with `command`, `args`, and optional `env`.
+  </Step>
+  <Step title="Restart Claude Desktop">
+    Close and reopen Claude Desktop. Your server should appear in the tools list.
+  </Step>
+  <Step title="Verify connection">
+    In a Claude conversation, click the tools icon. You should see your server's tools listed.
+  </Step>
+</Steps>
+
+## VS Code (GitHub Copilot Agent mode)
+
+VS Code uses a workspace-level `.vscode/mcp.json` file. This was covered in detail in [VS Code Integration](/modules/03-vscode).
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "api-key",
+      "description": "API Key",
+      "password": true
+    }
+  ],
+  "servers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["server.py"],
+      "env": {
+        "API_KEY": "${input:api-key}"
+      }
+    }
+  }
+}
+```
+
+## Cursor
+
+Cursor supports MCP servers through its settings.
+
+<Steps>
+  <Step title="Open Cursor Settings">
+    Go to **Cursor Settings → Features → MCP**.
+  </Step>
+  <Step title="Add a new server">
+    Click **Add new MCP server** and fill in the server details:
+
+    ```json
+    {
+      "mcpServers": {
+        "my-calculator": {
+          "command": "python",
+          "args": ["/path/to/mcp_calculator_server.py"]
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Enable the server">
+    Toggle the server on. Cursor will start the server process and make its tools available in Composer and Chat.
+  </Step>
+</Steps>
+
+## Cline
+
+Cline is a VS Code extension with MCP support.
+
+<Steps>
+  <Step title="Open Cline settings">
+    Click the Cline extension icon → **MCP Servers → Edit Config**.
+  </Step>
+  <Step title="Add your server">
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "node",
+          "args": ["/path/to/build/index.js"],
+          "env": {
+            "API_KEY": "your-key"
+          },
+          "disabled": false,
+          "autoApprove": []
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Transport types
+
+All hosts support both transport types:
+
+| Transport | Configuration | Use case |
+|-----------|--------------|----------|
+| `stdio` | `"type": "stdio"` with `command` + `args` | Local servers — host manages process lifecycle |
+| `sse` / `http` | `"type": "sse"` with `url` | Remote servers running independently |
+
+### SSE server example
+
+```json
+{
+  "servers": {
+    "remote-server": {
+      "type": "sse",
+      "url": "http://localhost:8080/sse",
+      "headers": {
+        "Authorization": "Bearer my-token"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server not appearing in tools list">
+    - Check the config file for JSON syntax errors (use a JSON validator)
+    - Verify the `command` path is correct and the executable is available in your PATH
+    - Restart the host application after changes
+    - Check the host's logs for startup errors
+  </Accordion>
+  <Accordion title="Server crashes on startup">
+    - Test the command manually in a terminal first: `python server.py`
+    - Ensure all dependencies are installed (`pip install -r requirements.txt`)
+    - Check that environment variables like `API_KEY` are set correctly
+  </Accordion>
+  <Accordion title="Tools available but not working">
+    - Use the [MCP Inspector](/modules/03-mcp-inspector) to test your server independently of the host
+    - Check the server's error output in the host's developer tools or logs
+    - Verify tool parameter schemas match what you're sending
+  </Accordion>
+</AccordionGroup>
+
+## Key takeaways
+
+- Each MCP host reads a JSON config file that maps server names to their startup `command` and `args`.
+- For `stdio` servers, the host manages the process — no port configuration needed.
+- For remote servers, use `sse` transport with a `url` pointing to your server.
+- Always test your server with the [MCP Inspector](/modules/03-mcp-inspector) before configuring it in a host.

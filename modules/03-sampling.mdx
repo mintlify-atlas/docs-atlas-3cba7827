@@ -1,0 +1,211 @@
+---
+title: "Sampling"
+description: "Use MCP sampling to delegate LLM calls from your server to the client — enabling server-side AI workflows without embedding an LLM in the server itself."
+---
+
+**Sampling** lets an MCP Server ask the MCP Client to call an LLM on its behalf. This is useful when your server needs AI-generated content (like a summary or analysis) but shouldn't — or can't — call an LLM directly. The client, which already has access to an LLM, handles the request and returns the result.
+
+## When to use sampling
+
+A concrete example: a blog post creation tool that also needs a generated abstract. The server has all the content, but the LLM lives on the client side.
+
+```
+User → MCP Client: "Author blog post"
+         ↓
+MCP Client → MCP Server: Tool call (create_blog)
+         ↓
+MCP Server → MCP Client: sampling/createMessage (create summary)
+         ↓
+MCP Client → LLM: Generate abstract
+         ↓
+LLM → MCP Client: Abstract text
+         ↓
+MCP Client → MCP Server: Sampling response (abstract)
+         ↓
+MCP Server → MCP Client: Complete blog post (draft + abstract)
+         ↓
+MCP Client → User: Blog post ready
+```
+
+## The sampling request
+
+The server sends a `sampling/createMessage` JSON-RPC request to the client:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sampling/createMessage",
+  "params": {
+    "messages": [
+      {
+        "role": "user",
+        "content": {
+          "type": "text",
+          "text": "Create a blog post summary of the following blog post: <BLOG POST>"
+        }
+      }
+    ],
+    "modelPreferences": {
+      "hints": [
+        { "name": "claude-3-sonnet" }
+      ],
+      "intelligencePriority": 0.8,
+      "speedPriority": 0.5
+    },
+    "systemPrompt": "You are a helpful assistant.",
+    "maxTokens": 100
+  }
+}
+```
+
+### Key fields
+
+| Field | Description |
+|-------|-------------|
+| `messages` | The conversation messages to send to the LLM |
+| `modelPreferences.hints` | Preferred models (the client may use a different one) |
+| `intelligencePriority` | 0–1 scale; higher = prefer smarter model |
+| `speedPriority` | 0–1 scale; higher = prefer faster model |
+| `systemPrompt` | System instruction for the LLM |
+| `maxTokens` | Recommended token limit for the response |
+
+<Info>
+  Model preferences are **recommendations only**. The user (via the client) can choose a different model. Your server code must handle responses from any model.
+</Info>
+
+## The sampling response
+
+After the client calls the LLM, it sends the result back to the server:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "role": "assistant",
+    "content": {
+      "type": "text",
+      "text": "Here's your abstract: <ABSTRACT>"
+    },
+    "model": "gpt-5",
+    "stopReason": "endTurn"
+  }
+}
+```
+
+Note: the `model` in the response may differ from what you requested — the user chose `gpt-5` instead of `claude-3-sonnet`.
+
+## Message content types
+
+Sampling messages support text, images, and audio:
+
+<CodeGroup>
+```json Text
+{
+  "type": "text",
+  "text": "The message content"
+}
+```
+
+```json Image
+{
+  "type": "image",
+  "data": "base64-encoded-image-data",
+  "mimeType": "image/jpeg"
+}
+```
+
+```json Audio
+{
+  "type": "audio",
+  "data": "base64-encoded-audio-data",
+  "mimeType": "audio/wav"
+}
+```
+</CodeGroup>
+
+## Implementing a sampling server (Python)
+
+Here's a complete blog post tool that uses sampling to generate an abstract:
+
+```python
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
+from mcp.types import SamplingMessage, TextContent
+from pydantic import BaseModel
+import json
+
+mcp = FastMCP("Blog post generator")
+posts = []
+
+class BlogPost(BaseModel):
+    id: int
+    title: str
+    content: str
+    abstract: str = ""
+
+@mcp.tool()
+async def create_blog(
+    title: str,
+    content: str,
+    ctx: Context[ServerSession, None]
+) -> str:
+    """Create a blog post and generate a summary using sampling."""
+
+    # Step 1: Create the blog post object
+    post = BlogPost(
+        id=len(posts) + 1,
+        title=title,
+        content=content,
+        abstract=""
+    )
+
+    # Step 2: Send a sampling request to the client
+    prompt = f"Create an abstract of the following blog post: title: {title} and draft: {content}"
+
+    result = await ctx.session.create_message(
+        messages=[
+            SamplingMessage(
+                role="user",
+                content=TextContent(type="text", text=prompt),
+            )
+        ],
+        max_tokens=100,
+    )
+
+    # Step 3: Use the LLM response as the abstract
+    post.abstract = result.content.text
+    posts.append(post)
+
+    # Step 4: Return the complete post
+    return json.dumps({
+        "id": post.id,
+        "title": post.title,
+        "abstract": post.abstract
+    })
+```
+
+## Enabling sampling in the client
+
+If you are also building the client (not just the server), declare sampling support in client capabilities:
+
+```json
+{
+  "capabilities": {
+    "sampling": {}
+  }
+}
+```
+
+<Note>
+  If you are only building the MCP Server, you don't need to configure anything on the client side — the host application (Claude Desktop, VS Code, etc.) handles sampling responses automatically.
+</Note>
+
+## Key takeaways
+
+- Sampling lets a server delegate LLM calls to the client — the server sends a `sampling/createMessage` request and the client calls the LLM and returns the result.
+- Model preferences are recommendations; the client and user choose the actual model used.
+- Sampling messages support text, image, and audio content types.
+- The server uses `ctx.session.create_message()` (Python) to issue sampling requests from within a tool.
+- This pattern is only available with the low-level server API or via the `Context` object in FastMCP.
